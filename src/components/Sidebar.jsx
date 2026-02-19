@@ -1,0 +1,242 @@
+import { useState } from "react";
+import {
+  Box,
+  Collapse,
+  Divider,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+} from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import BusinessIcon from "@mui/icons-material/Business";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import FactCheckIcon from "@mui/icons-material/FactCheck";
+
+const navItems = [
+  { label: "Overview", icon: <DashboardIcon /> },
+  { label: "Properties", icon: <BusinessIcon /> },
+  { label: "Screening", icon: <FactCheckIcon /> },
+  { label: "Risk Flags", icon: <WarningAmberIcon /> },
+  { label: "Reports", icon: <AssessmentIcon /> },
+];
+
+const DEAL_ROWS = [
+  { key: "borrower", label: "Borrower" },
+  { key: "loanAmount", label: "Loan Amount" },
+  { key: "stage", label: "Stage" },
+  { key: "region", label: "Region" },
+];
+
+function Sidebar({
+  drawerWidth = 240,
+  selectedPage,
+  setSelectedPage,
+  onNavigatePipeline,
+  dealContext,
+}) {
+  const [dealContextExpanded, setDealContextExpanded] = useState(false);
+
+  const handleBackToPipeline = () => {
+    if (onNavigatePipeline) onNavigatePipeline();
+    else setSelectedPage("Overview");
+  };
+
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: drawerWidth,
+        flexShrink: 0,
+        "& .MuiDrawer-paper": (theme) => ({
+          width: drawerWidth,
+          boxSizing: "border-box",
+          top: 0,
+          borderRight: 1,
+          borderColor: "divider",
+          bgcolor: theme.palette.drawer.main,
+          color: theme.palette.drawer.contrastText,
+          "& .MuiListItemButton-root": {
+            color: theme.palette.drawer.contrastText,
+          },
+          "& .MuiListItemIcon-root": {
+            color: theme.palette.drawer.contrastText,
+          },
+          "& .MuiListItemButton-root.Mui-selected": {
+            bgcolor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
+            "& .MuiListItemIcon-root": {
+              color: theme.palette.primary.contrastText,
+            },
+          },
+        }),
+      }}
+    >
+      <Box
+        sx={{
+          px: 2,
+          py: 2,
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+        }}
+      >
+        <Box
+          sx={{
+            width: 32,
+            height: 32,
+            borderRadius: 1,
+            bgcolor: "primary.main",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Typography
+            component="span"
+            variant="body2"
+            sx={{ color: "primary.contrastText", fontWeight: 700 }}
+          >
+            MF
+          </Typography>
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            variant="subtitle1"
+            fontWeight={600}
+            noWrap
+            sx={{ color: "inherit", lineHeight: 1.2 }}
+          >
+            Meridian Finance
+          </Typography>
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{ color: "inherit", opacity: 0.7, lineHeight: 1.2 }}
+          >
+            Multifamily Platform
+          </Typography>
+        </Box>
+      </Box>
+      <Divider sx={{ borderColor: "divider" }} />
+      <Box sx={{ overflow: "auto", pt: 1.5 }}>
+        <List component="nav" disablePadding>
+          <ListItemButton onClick={handleBackToPipeline} sx={{ py: 1 }}>
+            <ListItemIcon sx={{ color: "text.secondary" }}>
+              <ArrowBackIcon />
+            </ListItemIcon>
+            <ListItemText
+              primary="Back to Pipeline"
+              primaryTypographyProps={{ variant: "body2" }}
+            />
+          </ListItemButton>
+        </List>
+        <Divider sx={{ borderColor: "divider" }} />
+        <Typography
+          variant="overline"
+          sx={{
+            px: 2,
+            pt: 1.5,
+            pb: 0.5,
+            color: "rgba(255,255,255,0.6)",
+            letterSpacing: 1.2,
+          }}
+        >
+          Workspace
+        </Typography>
+        <ListItemButton
+          onClick={() => setDealContextExpanded((prev) => !prev)}
+          sx={{ py: 1 }}
+        >
+          <ListItemText
+            primary={dealContext?.dealName ?? "—"}
+            primaryTypographyProps={{
+              variant: "body2",
+              noWrap: true,
+              sx: {
+                color: "common.white",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "100%",
+              },
+            }}
+            sx={{ flex: 1, minWidth: 0 }}
+          />
+          <ListItemIcon sx={{ minWidth: 0 }}>
+            {dealContextExpanded ? (
+              <ExpandLessIcon />
+            ) : (
+              <ExpandMoreIcon />
+            )}
+          </ListItemIcon>
+        </ListItemButton>
+        <Collapse in={dealContextExpanded}>
+          <Box
+            sx={{
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 2,
+              px: 2,
+              py: 1.5,
+              mx: 2,
+              mb: 2,
+            }}
+          >
+            <Typography
+              variant="overline"
+              sx={{
+                color: "rgba(255,255,255,0.6)",
+                letterSpacing: 1.2,
+              }}
+            >
+              Deal
+            </Typography>
+            <Typography
+              variant="subtitle2"
+              sx={{ color: "common.white", display: "block", mt: 0.5 }}
+            >
+              {dealContext?.dealName ?? "—"}
+            </Typography>
+            {DEAL_ROWS.map(({ key, label }) => (
+              <Box key={key} sx={{ mt: 1 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "rgba(255,255,255,0.6)", display: "block" }}
+                >
+                  {label}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ color: "common.white" }}
+                >
+                  {dealContext?.[key] ?? "—"}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Collapse>
+        <Divider sx={{ borderColor: "divider" }} />
+        <List component="nav" disablePadding>
+          {navItems.map((item) => (
+            <ListItemButton
+              key={item.label}
+              selected={selectedPage === item.label}
+              onClick={() => setSelectedPage(item.label)}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          ))}
+        </List>
+      </Box>
+    </Drawer>
+  );
+}
+
+export default Sidebar;
