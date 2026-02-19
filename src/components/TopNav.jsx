@@ -2,15 +2,9 @@ import { AppBar, Toolbar, Typography } from "@mui/material";
 
 const APP_BAR_HEIGHT = 64;
 
-function TopNav({ title = "Multifamily Portfolio Dashboard", drawerWidth = 240 }) {
+function TopNav({ title = "Multifamily Portfolio Dashboard" }) {
   return (
-    <AppBar
-      position="fixed"
-      sx={{
-        width: { sm: `calc(100% - ${drawerWidth}px)` },
-        ml: { sm: `${drawerWidth}px` },
-      }}
-    >
+    <AppBar position="sticky" sx={{ width: "100%" }}>
       <Toolbar>
         <Typography variant="h6" noWrap component="h1">
           {title}

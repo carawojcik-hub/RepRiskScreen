@@ -1,13 +1,12 @@
-import { Box, Toolbar } from "@mui/material";
-import TopNav, { APP_BAR_HEIGHT } from "./TopNav";
+import { useState } from "react";
+import { Box } from "@mui/material";
+import TopNav from "./TopNav";
 import Sidebar from "./Sidebar";
 import OverviewPage from "./pages/OverviewPage";
 import PropertiesPage from "./pages/PropertiesPage";
 import RiskFlagsPage from "./pages/RiskFlagsPage";
 import ReportsPage from "./pages/ReportsPage";
 import DealScreeningPage from "./pages/DealScreeningPage";
-
-const DRAWER_WIDTH = 240;
 
 const PAGE_COMPONENTS = {
   Overview: OverviewPage,
@@ -30,13 +29,14 @@ function DashboardLayout({
   setSelectedPage,
   onNavigatePipeline,
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   const PageContent = PAGE_COMPONENTS[selectedPage] ?? OverviewPage;
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh" }}>
-      <TopNav drawerWidth={DRAWER_WIDTH} />
+    <Box sx={{ display: "flex", minHeight: "100vh", overflow: "hidden" }}>
       <Sidebar
-        drawerWidth={DRAWER_WIDTH}
+        collapsed={collapsed}
+        onToggleSidebar={() => setCollapsed((prev) => !prev)}
         selectedPage={selectedPage}
         setSelectedPage={setSelectedPage}
         onNavigatePipeline={onNavigatePipeline}
@@ -46,13 +46,16 @@ function DashboardLayout({
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
-          mt: `${APP_BAR_HEIGHT}px`,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          bgcolor: "background.default",
         }}
       >
-        <Toolbar />
-        <PageContent onNavigatePipeline={onNavigatePipeline} />
+        <TopNav />
+        <Box sx={{ p: 3, flex: 1, minHeight: 0, overflow: "auto" }}>
+          <PageContent onNavigatePipeline={onNavigatePipeline} />
+        </Box>
       </Box>
     </Box>
   );
