@@ -936,7 +936,7 @@ function DealScreeningPage({ onBackToPipeline }) {
               {selectedEntity.name}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {selectedEntity.type} \u00b7 Reputation findings
+              {selectedEntity.type} · Reputation findings
             </Typography>
 
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
@@ -953,7 +953,7 @@ function DealScreeningPage({ onBackToPipeline }) {
                     <ListItem key={deal.dealName} disablePadding sx={{ py: 0.25 }}>
                       <ListItemText
                         primary={deal.dealName}
-                        secondary={`${deal.closeDate} \u00b7 ${deal.screeningDate} \u00b7 ${deal.outcomeSummary}`}
+                        secondary={`${deal.closeDate} · ${deal.screeningDate} · ${deal.outcomeSummary}`}
                         primaryTypographyProps={{ variant: "body2" }}
                         secondaryTypographyProps={{ variant: "caption", color: "text.secondary" }}
                       />
@@ -978,7 +978,7 @@ function DealScreeningPage({ onBackToPipeline }) {
                 {FINDINGS_BY_ENTITY[selectedEntity.name].map((finding, index) => {
                   const isImported = importedEntityIds.includes(selectedEntity.id);
                   const sourceLabel = isImported
-                    ? `Prior deal \u00b7 ${finding.source}`
+                    ? `Prior deal · ${finding.source}`
                     : finding.source;
                   return (
                   <Paper key={index} variant="outlined" sx={{ p: 2 }}>
