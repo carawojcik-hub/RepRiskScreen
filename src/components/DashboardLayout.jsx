@@ -28,6 +28,8 @@ function DashboardLayout({
   selectedPage,
   setSelectedPage,
   onNavigatePipeline,
+  entities,
+  setEntities,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const PageContent = PAGE_COMPONENTS[selectedPage] ?? OverviewPage;
@@ -41,6 +43,7 @@ function DashboardLayout({
         setSelectedPage={setSelectedPage}
         onNavigatePipeline={onNavigatePipeline}
         dealContext={dealContext}
+        entities={entities}
       />
       <Box
         component="main"
@@ -54,7 +57,11 @@ function DashboardLayout({
       >
         <TopNav />
         <Box sx={{ p: 3, flex: 1, minHeight: 0, overflow: "auto" }}>
-          <PageContent onNavigatePipeline={onNavigatePipeline} />
+          <PageContent
+            onNavigatePipeline={onNavigatePipeline}
+            entities={entities}
+            setEntities={setEntities}
+          />
         </Box>
       </Box>
     </Box>

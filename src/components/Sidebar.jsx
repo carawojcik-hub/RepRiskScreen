@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Badge,
   Box,
   Collapse,
   Divider,
@@ -21,6 +22,14 @@ import BusinessIcon from "@mui/icons-material/Business";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
+
+const getPendingScreeningCount = (entities) => {
+  if (!entities || !entities.length) return 0;
+  return entities.filter((e) => {
+    const s = (e.searchStatus || "").trim().toLowerCase();
+    return s === "not yet run";
+  }).length;
+};
 
 const navItems = [
   { label: "Overview", icon: <DashboardIcon /> },
@@ -47,8 +56,10 @@ function Sidebar({
   setSelectedPage,
   onNavigatePipeline,
   dealContext,
+  entities = [],
 }) {
   const [dealContextExpanded, setDealContextExpanded] = useState(false);
+  const pendingScreeningCount = getPendingScreeningCount(entities);
 
   const handleBackToPipeline = () => {
     if (onNavigatePipeline) onNavigatePipeline();
@@ -276,13 +287,32 @@ function Sidebar({
         )}
         {collapsed && <Divider sx={{ borderColor: "divider" }} />}
         <List component="nav" disablePadding>
-          {navItems.map((item) => (
+          {navItems.map((item) => {
+            const isScreening = item.label === "Screening";
+            return (
             <Tooltip key={item.label} title={item.label} placement="right">
               <ListItemButton
                 selected={selectedPage === item.label}
                 onClick={() => setSelectedPage(item.label)}
               >
-                <ListItemIcon>{item.icon}</ListItemIcon>
+                <ListItemIcon>
+                  {isScreening ? (
+                    <Badge
+                      badgeContent={
+                        pendingScreeningCount > 9
+                          ? "9+"
+                          : pendingScreeningCount
+                      }
+                      color="error"
+                      overlap="circular"
+                      invisible={pendingScreeningCount === 0}
+                    >
+                      {item.icon}
+                    </Badge>
+                  ) : (
+                    item.icon
+                  )}
+                </ListItemIcon>
                 <ListItemText
                   primary={item.label}
                   sx={{
@@ -298,7 +328,8 @@ function Sidebar({
                 />
               </ListItemButton>
             </Tooltip>
-          ))}
+            );
+          })}
         </List>
       </Box>
     </Box>

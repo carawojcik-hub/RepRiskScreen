@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Box,
   Button,
   Checkbox,
@@ -38,7 +35,6 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 const DEFAULT_TERMS = [
   "Litigation",
@@ -46,237 +42,6 @@ const DEFAULT_TERMS = [
   "Regulatory Action",
   "Sanctions",
   "Fraud",
-];
-
-const ENTITIES = [
-  {
-    id: 1,
-    name: "Sunset Holdings LLC",
-    type: "Borrower",
-    source: "Borrower profile",
-    searchStatus: "Complete",
-    riskLevel: "Low",
-    priorScreening: "No",
-    priorDeals: [
-      {
-        dealName: "Riverside Towers Refinance",
-        closeDate: "2019-06-15",
-        screeningDate: "2019-05-30",
-        outcomeSummary: "2 findings (1 false positive)",
-      },
-      {
-        dealName: "Harborview Portfolio Acquisition",
-        closeDate: "2021-11-02",
-        screeningDate: "2021-10-20",
-        outcomeSummary: "1 finding (0 false positives)",
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Sunset Villas",
-    type: "Property",
-    source: "Property data",
-    searchStatus: "In Progress",
-    riskLevel: "Medium",
-    priorScreening: "No",
-    priorDeals: [],
-  },
-  {
-    id: 3,
-    name: "Horizon Management Group",
-    type: "Management Company",
-    source: "Org chart",
-    searchStatus: "Complete",
-    riskLevel: "Low",
-    priorScreening: "Yes",
-    priorDeals: [
-      {
-        dealName: "Lakeside MHC Portfolio",
-        closeDate: "2018-09-01",
-        screeningDate: "2018-08-15",
-        outcomeSummary: "1 finding (1 false positive)",
-      },
-    ],
-  },
-  {
-    id: 4,
-    name: "Blue Harbor Capital",
-    type: "Seller",
-    source: "Transaction data",
-    searchStatus: "Complete",
-    riskLevel: "High",
-    priorScreening: "No",
-    priorDeals: [],
-  },
-  {
-    id: 5,
-    name: "Oakview Partners LP",
-    type: "Sponsor",
-    source: "Deal parties",
-    searchStatus: "Complete",
-    riskLevel: "Low",
-    priorScreening: "Yes",
-    priorDeals: [
-      {
-        dealName: "Maple Grove Recapitalization",
-        closeDate: "2020-03-15",
-        screeningDate: "2020-02-28",
-        outcomeSummary: "0 findings",
-      },
-    ],
-  },
-  {
-    id: 6,
-    name: "Lakeside Apartments",
-    type: "Property",
-    source: "Property data",
-    searchStatus: "Complete",
-    riskLevel: "Medium",
-    priorScreening: "No",
-    priorDeals: [],
-  },
-  {
-    id: 7,
-    name: "Harborstone Equity Fund II",
-    type: "Equity Partner",
-    source: "Deal parties",
-    searchStatus: "Complete",
-    riskLevel: "High",
-    priorScreening: "No",
-    priorDeals: [
-      {
-        dealName: "Harborview Portfolio Acquisition",
-        closeDate: "2021-11-02",
-        screeningDate: "2021-10-20",
-        outcomeSummary: "1 finding (0 false positives)",
-      },
-    ],
-  },
-  {
-    id: 8,
-    name: "Crescent Property Services",
-    type: "Management Company",
-    source: "Org chart",
-    searchStatus: "Complete",
-    riskLevel: "Low",
-    priorScreening: "Yes",
-    priorDeals: [
-      {
-        dealName: "Lakeside MHC Portfolio",
-        closeDate: "2018-09-01",
-        screeningDate: "2018-08-15",
-        outcomeSummary: "1 finding (1 false positive)",
-      },
-    ],
-  },
-  {
-    id: 9,
-    name: "Riverwalk Holdings LLC",
-    type: "Borrower Affiliate",
-    source: "Deal parties",
-    searchStatus: "In Progress",
-    riskLevel: "Medium",
-    priorScreening: "No",
-    priorDeals: [
-      {
-        dealName: "Riverside Towers Refinance",
-        closeDate: "2019-06-15",
-        screeningDate: "2019-05-30",
-        outcomeSummary: "2 findings (1 false positive)",
-      },
-      {
-        dealName: "Maple Grove Recapitalization",
-        closeDate: "2020-03-15",
-        screeningDate: "2020-02-28",
-        outcomeSummary: "0 findings",
-      },
-    ],
-  },
-  {
-    id: 10,
-    name: "Northgate Capital Partners",
-    type: "Co-Lender",
-    source: "Deal parties",
-    searchStatus: "Complete",
-    riskLevel: "Low",
-    priorScreening: "Yes",
-    priorDeals: [
-      {
-        dealName: "Harborview Portfolio Acquisition",
-        closeDate: "2021-11-02",
-        screeningDate: "2021-10-18",
-        outcomeSummary: "0 findings",
-      },
-    ],
-  },
-  {
-    id: 11,
-    name: "Elm Street Apartments",
-    type: "Property",
-    source: "Property data",
-    searchStatus: "Complete",
-    riskLevel: "Low",
-    priorScreening: "No",
-    priorDeals: [],
-  },
-  {
-    id: 12,
-    name: "Summit Ridge Ventures",
-    type: "Sponsor",
-    source: "Deal parties",
-    searchStatus: "In Progress",
-    riskLevel: "Medium",
-    priorScreening: "No",
-    priorDeals: [],
-  },
-  {
-    id: 13,
-    name: "Brightstone Advisory Group",
-    type: "Consultant",
-    source: "Deal parties",
-    searchStatus: "Complete",
-    riskLevel: "Low",
-    priorScreening: "Yes",
-    priorDeals: [],
-  },
-  {
-    id: 14,
-    name: "Seaside Holdings BV",
-    type: "Offshore Affiliate",
-    source: "Deal parties",
-    searchStatus: "Complete",
-    riskLevel: "High",
-    priorScreening: "No",
-    priorDeals: [
-      {
-        dealName: "Riverside Towers Refinance",
-        closeDate: "2019-06-15",
-        screeningDate: "2019-05-28",
-        outcomeSummary: "1 finding (0 false positives)",
-      },
-    ],
-  },
-  {
-    id: 15,
-    name: "Maple Grove Residences",
-    type: "Property",
-    source: "Property data",
-    searchStatus: "Complete",
-    riskLevel: "Low",
-    priorScreening: "Yes",
-    priorDeals: [],
-  },
-  {
-    id: 16,
-    name: "Cornerstone Real Estate Partners",
-    type: "Sponsor",
-    source: "Deal parties",
-    searchStatus: "Complete",
-    riskLevel: "Medium",
-    priorScreening: "No",
-    priorDeals: [],
-  },
 ];
 
 const FINDINGS_BY_ENTITY = {
@@ -298,22 +63,22 @@ const FINDINGS_BY_ENTITY = {
       url: "https://example.com/sunset-villas-finding-2",
     },
   ],
-  "Blue Harbor Capital": [
+  "Harborstone Equity Fund II": [
     {
-      id: "bhc-1",
+      id: "hef-1",
       summary: "Former executive named in SEC inquiry.",
       title: "Former executive named in SEC inquiry",
       category: "Litigation",
       source: "Lexis Nexis Bridger Insight",
-      url: "https://example.com/blue-harbor-finding-1",
+      url: "https://example.com/harborstone-equity-finding-1",
     },
     {
-      id: "bhc-2",
+      id: "hef-2",
       summary: "Media coverage of prior fund wind-down.",
       title: "Media coverage of prior fund wind-down",
       category: "Regulatory",
       source: "Google",
-      url: "https://example.com/blue-harbor-finding-2",
+      url: "https://example.com/harborstone-equity-finding-2",
     },
   ],
 };
@@ -324,7 +89,7 @@ const RISK_COLOR = {
   High: "error",
 };
 
-function DealScreeningPage({ onBackToPipeline }) {
+function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
   const [status, setStatus] = useState("Not Started");
   const [lastRun, setLastRun] = useState("");
   const [newEntitiesDetected, setNewEntitiesDetected] = useState(true);
@@ -333,7 +98,6 @@ function DealScreeningPage({ onBackToPipeline }) {
   const [lastRunTerms, setLastRunTerms] = useState([...DEFAULT_TERMS]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState(null);
-  const [criteriaExpanded, setCriteriaExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyFlagged, setShowOnlyFlagged] = useState(false);
   const [page, setPage] = useState(0);
@@ -376,7 +140,7 @@ function DealScreeningPage({ onBackToPipeline }) {
   }, [findingNotes]);
 
   const allPriorDeals = useMemo(() => {
-    const flat = ENTITIES.flatMap((entity) => entity.priorDeals || []);
+    const flat = entities.flatMap((entity) => entity.priorDeals || []);
     const byName = new Map();
     flat.forEach((deal) => {
       if (!byName.has(deal.dealName)) {
@@ -391,7 +155,7 @@ function DealScreeningPage({ onBackToPipeline }) {
     return Array.from(byName.values()).sort(
       (a, b) => (b.screeningDate || "").localeCompare(a.screeningDate || "")
     );
-  }, []);
+  }, [entities]);
 
   const SECTION_IDS = ["deal-summary", "entities", "search-criteria"];
 
@@ -453,7 +217,7 @@ function DealScreeningPage({ onBackToPipeline }) {
 
   const handleBulkImportSelected = () => {
     setBulkImportedDealNames(selectedDealNames);
-    const entityIds = ENTITIES.filter((entity) =>
+    const entityIds = entities.filter((entity) =>
       (entity.priorDeals || []).some((pd) => selectedDealNames.includes(pd.dealName))
     ).map((e) => e.id);
     setImportedEntityIds(entityIds);
@@ -491,8 +255,19 @@ function DealScreeningPage({ onBackToPipeline }) {
     if (status === "Running") return;
 
     setStatus("Running");
-    setNewEntitiesDetected(true);
     setLastRunTerms([...DEFAULT_TERMS, ...customTerms]);
+
+    if (setEntities) {
+      setEntities((prev) =>
+        prev.map((e) => ({
+          ...e,
+          searchStatus:
+            (e.searchStatus || "").toLowerCase().includes("complete")
+              ? e.searchStatus
+              : "In Progress",
+        }))
+      );
+    }
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -502,6 +277,11 @@ function DealScreeningPage({ onBackToPipeline }) {
       setStatus("Completed");
       setLastRun(new Date().toLocaleString());
       setNewEntitiesDetected(false);
+      if (setEntities) {
+        setEntities((prev) =>
+          prev.map((e) => ({ ...e, searchStatus: "Complete" }))
+        );
+      }
     }, 2000);
   };
 
@@ -516,7 +296,7 @@ function DealScreeningPage({ onBackToPipeline }) {
   const filteredEntities = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    return ENTITIES.filter((entity) => {
+    return entities.filter((entity) => {
       const matchesQuery = query
         ? entity.name.toLowerCase().includes(query)
         : true;
@@ -526,7 +306,7 @@ function DealScreeningPage({ onBackToPipeline }) {
 
       return matchesQuery && matchesFlagged;
     });
-  }, [searchQuery, showOnlyFlagged]);
+  }, [entities, searchQuery, showOnlyFlagged]);
 
   const pagedEntities = useMemo(() => {
     const start = page * rowsPerPage;
@@ -676,7 +456,6 @@ function DealScreeningPage({ onBackToPipeline }) {
               variant="body2"
               onClick={() => {
                 setActiveTab(2);
-                setCriteriaExpanded(true);
                 setTimeout(() => {
                   document.getElementById("search-criteria")?.scrollIntoView({ behavior: "smooth", block: "start" });
                 }, 0);
@@ -687,7 +466,7 @@ function DealScreeningPage({ onBackToPipeline }) {
             </Link>
           </Box>
 
-          {status !== "Not Started" && newEntitiesDetected && (
+          {status === "Completed" && newEntitiesDetected && (
             <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
               New entities detected since last screening
             </Typography>
@@ -730,7 +509,7 @@ function DealScreeningPage({ onBackToPipeline }) {
               label="Show only flagged"
             />
             <Typography variant="caption" color="text.secondary">
-              {`Showing ${filteredEntities.length} of ${ENTITIES.length} entities`}
+              {`Showing ${filteredEntities.length} of ${entities.length} entities`}
             </Typography>
           </Box>
         </Box>
@@ -919,108 +698,75 @@ function DealScreeningPage({ onBackToPipeline }) {
           <Typography variant="h6" sx={{ mb: 2 }}>
             Search Criteria
           </Typography>
-          <Accordion
-            expanded={criteriaExpanded}
-            onChange={(_, expanded) => setCriteriaExpanded(expanded)}
-            disableGutters
-            sx={{
-              boxShadow: "none",
-              "&::before": { display: "none" },
-            }}
-          >
-            <AccordionSummary
-              expandIcon={<ExpandMoreIcon />}
-              aria-controls="search-criteria-content"
-              id="search-criteria-header"
-              sx={{
-                px: 0,
-                "& .MuiAccordionSummary-content": {
-                  margin: 0,
-                },
-                "& .MuiAccordionSummary-content.Mui-expanded": {
-                  margin: 0,
-                },
-              }}
-            >
-              <Typography variant="subtitle2" color="text.secondary">
-                {`Search Criteria${
-                  customTerms.length > 0
-                    ? ` (${customTerms.length} custom)`
-                    : ""
-                }`}
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Box sx={{ mb: 2 }}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mb: 1 }}
-                >
-                  Default Terms
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" rowGap={1}>
-                  {DEFAULT_TERMS.map((term) => (
-                    <Chip
-                      key={term}
-                      label={term}
-                      variant="outlined"
-                      color="primary"
-                      size="small"
-                    />
-                  ))}
-                </Stack>
-              </Box>
 
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mb: 1 }}
-                >
-                  Custom Terms
-                </Typography>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  spacing={1}
-                  alignItems={{ xs: "stretch", sm: "center" }}
-                  sx={{ mb: 1.5 }}
-                >
-                  <TextField
-                    label="Add Custom Search Term"
+          <Box sx={{ mb: 2 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mb: 1 }}
+            >
+              Default Terms
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap" rowGap={1}>
+              {DEFAULT_TERMS.map((term) => (
+                <Chip
+                  key={term}
+                  label={term}
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                />
+              ))}
+            </Stack>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mb: 1 }}
+            >
+              Custom Terms
+            </Typography>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              sx={{ mb: 1.5 }}
+            >
+              <TextField
+                label="Add Custom Search Term"
+                size="small"
+                value={currentTerm}
+                onChange={(event) => setCurrentTerm(event.target.value)}
+                sx={{ maxWidth: 320 }}
+              />
+              <Button
+                variant="outlined"
+                onClick={handleAddTerm}
+                sx={{ alignSelf: { xs: "flex-start", sm: "center" } }}
+              >
+                Add
+              </Button>
+            </Stack>
+            {customTerms.length > 0 && (
+              <Stack
+                direction="row"
+                spacing={1}
+                flexWrap="wrap"
+                rowGap={1}
+              >
+                {customTerms.map((term) => (
+                  <Chip
+                    key={term}
+                    label={term}
                     size="small"
-                    value={currentTerm}
-                    onChange={(event) => setCurrentTerm(event.target.value)}
-                    sx={{ maxWidth: 320 }}
+                    onDelete={() => handleRemoveTerm(term)}
                   />
-                  <Button
-                    variant="outlined"
-                    onClick={handleAddTerm}
-                    sx={{ alignSelf: { xs: "flex-start", sm: "center" } }}
-                  >
-                    Add
-                  </Button>
-                </Stack>
-                {customTerms.length > 0 && (
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    flexWrap="wrap"
-                    rowGap={1}
-                  >
-                    {customTerms.map((term) => (
-                      <Chip
-                        key={term}
-                        label={term}
-                        size="small"
-                        onDelete={() => handleRemoveTerm(term)}
-                      />
-                    ))}
-                  </Stack>
-                )}
-              </Box>
-            </AccordionDetails>
-          </Accordion>
+                ))}
+              </Stack>
+            )}
+          </Box>
         </Paper>
       </Box>
 
