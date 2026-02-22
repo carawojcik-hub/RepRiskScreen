@@ -2,15 +2,17 @@ import { useState } from "react";
 import { Box } from "@mui/material";
 import TopNav from "./TopNav";
 import Sidebar from "./Sidebar";
+import DealScreeningPage from "./pages/DealScreeningPage";
+import BorrowerPage from "./pages/BorrowerPage";
 import OverviewPage from "./pages/OverviewPage";
 import PropertiesPage from "./pages/PropertiesPage";
-import RiskFlagsPage from "./pages/RiskFlagsPage";
 import ReportsPage from "./pages/ReportsPage";
-import DealScreeningPage from "./pages/DealScreeningPage";
+import RiskFlagsPage from "./pages/RiskFlagsPage";
 
 const PAGE_COMPONENTS = {
   Overview: OverviewPage,
   Properties: PropertiesPage,
+  Borrower: BorrowerPage,
   Screening: DealScreeningPage,
   "Risk Flags": RiskFlagsPage,
   Reports: ReportsPage,
@@ -59,6 +61,7 @@ function DashboardLayout({
         <Box sx={{ p: 3, flex: 1, minHeight: 0, overflow: "auto" }}>
           <PageContent
             onNavigatePipeline={onNavigatePipeline}
+            setSelectedPage={setSelectedPage}
             entities={entities}
             setEntities={setEntities}
           />

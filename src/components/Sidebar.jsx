@@ -17,23 +17,25 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import BusinessIcon from "@mui/icons-material/Business";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import AssessmentIcon from "@mui/icons-material/Assessment";
+import BusinessIcon from "@mui/icons-material/Business";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
 const getPendingScreeningCount = (entities) => {
   if (!entities || !entities.length) return 0;
   return entities.filter((e) => {
     const s = (e.searchStatus || "").trim().toLowerCase();
-    return s === "not yet run";
+    return s === "" || s === "not yet run";
   }).length;
 };
 
 const navItems = [
   { label: "Overview", icon: <DashboardIcon /> },
   { label: "Properties", icon: <BusinessIcon /> },
+  { label: "Borrower", icon: <AccountBalanceIcon /> },
   { label: "Screening", icon: <FactCheckIcon /> },
   { label: "Risk Flags", icon: <WarningAmberIcon /> },
   { label: "Reports", icon: <AssessmentIcon /> },

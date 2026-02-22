@@ -8,6 +8,7 @@ export const ENTITIES = [
     riskLevel: "Medium",
     priorScreening: "No",
     priorDeals: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 2,
@@ -18,6 +19,7 @@ export const ENTITIES = [
     riskLevel: "Low",
     priorScreening: "No",
     priorDeals: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 3,
@@ -41,6 +43,7 @@ export const ENTITIES = [
         outcomeSummary: "1 finding (0 false positives)",
       },
     ],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 4,
@@ -51,6 +54,7 @@ export const ENTITIES = [
     riskLevel: "Low",
     priorScreening: "No",
     priorDeals: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 5,
@@ -61,6 +65,7 @@ export const ENTITIES = [
     riskLevel: "Low",
     priorScreening: "No",
     priorDeals: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 6,
@@ -78,6 +83,7 @@ export const ENTITIES = [
         outcomeSummary: "1 finding (1 false positive)",
       },
     ],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 7,
@@ -88,6 +94,7 @@ export const ENTITIES = [
     riskLevel: "Medium",
     priorScreening: "No",
     priorDeals: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 8,
@@ -98,6 +105,7 @@ export const ENTITIES = [
     riskLevel: "Low",
     priorScreening: "Yes",
     priorDeals: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 9,
@@ -108,6 +116,7 @@ export const ENTITIES = [
     riskLevel: "High",
     priorScreening: "No",
     priorDeals: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 10,
@@ -118,6 +127,7 @@ export const ENTITIES = [
     riskLevel: "Low",
     priorScreening: "No",
     priorDeals: [],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
   {
     id: 11,
@@ -135,5 +145,6 @@ export const ENTITIES = [
         outcomeSummary: "1 finding (0 false positives)",
       },
     ],
+    createdAt: "2024-01-01T00:00:00.000Z",
   },
 ];

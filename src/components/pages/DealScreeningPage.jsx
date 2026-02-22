@@ -45,40 +45,86 @@ const DEFAULT_TERMS = [
 ];
 
 const FINDINGS_BY_ENTITY = {
-  "Sunset Villas": [
+  "Blue Harbor Management Group": [
     {
-      id: "sv-1",
-      summary: "Noise complaints filed by neighboring community association (2023).",
-      title: "Noise complaints filed by neighboring community association",
-      category: "Regulatory",
-      source: "Google",
-      url: "https://example.com/sunset-villas-finding-1",
-    },
-    {
-      id: "sv-2",
-      summary: "Code enforcement inspection related to parking allocation.",
-      title: "Code enforcement inspection related to parking allocation",
-      category: "Regulatory",
-      source: "News PDF",
-      url: "https://example.com/sunset-villas-finding-2",
+      id: "bhmg-flsa-1",
+      headline:
+        "DOL settles wage theft claims against property management company",
+      oneSentenceSummary:
+        "Settlement of FLSA claims against the property manager could signal operational and compliance weaknesses that may affect sponsor reputation and future HUD/compliance reviews for the asset.",
+      sourceLabel: "Department of Labor",
+      sourceUrl: "https://example.com/dol-settlement-bhmg",
+      publishedDate: "2024-10-12",
+      severity: "Medium",
+      tags: ["Litigation", "Labor", "Reputational"],
     },
   ],
-  "Harborstone Equity Fund II": [
+};
+
+function slugify(s) {
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function getEntityKey(entity) {
+  if (entity?.id != null && typeof entity.id === "string") return entity.id;
+  if (entity?.entityId != null) return entity.entityId;
+  return slugify(entity?.name);
+}
+
+const KEY_SUNSET_HOLDINGS = "sunset-holdings-llc";
+const KEY_BLUE_HARBOR = "blue-harbor-management-group";
+
+/** Prior findings by entity key (getEntityKey). Used for "Import prior findings" in drawer. */
+const PRIOR_FINDINGS_BY_ENTITY = {
+  [KEY_SUNSET_HOLDINGS]: [
     {
-      id: "hef-1",
-      summary: "Former executive named in SEC inquiry.",
-      title: "Former executive named in SEC inquiry",
-      category: "Litigation",
-      source: "Lexis Nexis Bridger Insight",
-      url: "https://example.com/harborstone-equity-finding-1",
+      id: "pf-001",
+      sourceDeal: "Riverside Towers Refinance",
+      date: "2019-05-30",
+      type: "Adverse Media",
+      severity: "Medium",
+      title: "Civil litigation referenced in local coverage",
+      snippet: "Mentions related to contractor dispute; no enforcement action found.",
+      url: "https://example.com/article",
     },
     {
-      id: "hef-2",
-      summary: "Media coverage of prior fund wind-down.",
-      title: "Media coverage of prior fund wind-down",
-      category: "Regulatory",
-      source: "Google",
-      url: "https://example.com/harborstone-equity-finding-2",
+      id: "pf-002",
+      sourceDeal: "Riverside Towers Refinance",
+      date: "2019-05-30",
+      type: "Sanctions/Watchlists",
+      severity: "Low",
+      title: "Name match review logged",
+      snippet: "Potential match cleared as false positive after analyst review.",
+      url: null,
+      isFalsePositive: true,
+    },
+    {
+      id: "pf-003",
+      sourceDeal: "Harborview Portfolio Acquisition",
+      date: "2021-10-20",
+      type: "Regulatory",
+      severity: "Low",
+      title: "Business registration discrepancy",
+      snippet: "Minor filing inconsistency corrected in subsequent records.",
+      url: null,
+    },
+  ],
+  [KEY_BLUE_HARBOR]: [
+    {
+      id: "pf-bh-001",
+      sourceDeal: "Lakeside MHC Portfolio",
+      date: "2018-08-15",
+      type: "Sanctions/Watchlists",
+      severity: "Low",
+      title: "Name match review logged",
+      snippet: "Potential match cleared as false positive after analyst review.",
+      url: null,
+      isFalsePositive: true,
     },
   ],
 };
@@ -89,10 +135,20 @@ const RISK_COLOR = {
   High: "error",
 };
 
-function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
+const linkSx = {
+  fontSize: "0.875rem",
+  fontWeight: 500,
+  color: "primary.main",
+  textDecoration: "underline",
+  textUnderlineOffset: "3px",
+  "&:hover": { opacity: 0.85 },
+  "&:visited": { color: "primary.main" },
+};
+
+function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSelectedPage }) {
   const [status, setStatus] = useState("Not Started");
   const [lastRun, setLastRun] = useState("");
-  const [newEntitiesDetected, setNewEntitiesDetected] = useState(true);
+  const [lastRunAt, setLastRunAt] = useState(null);
   const [customTerms, setCustomTerms] = useState([]);
   const [currentTerm, setCurrentTerm] = useState("");
   const [lastRunTerms, setLastRunTerms] = useState([...DEFAULT_TERMS]);
@@ -104,40 +160,49 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activeTab, setActiveTab] = useState(0);
   const [importedEntityIds, setImportedEntityIds] = useState([]);
+  const [importedFindingsByEntityId, setImportedFindingsByEntityId] = useState({});
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [selectedDealNames, setSelectedDealNames] = useState([]);
   const [bulkImportedDealNames, setBulkImportedDealNames] = useState([]);
-  const [findingNotes, setFindingNotes] = useState({});
-  const [noteSavedHintKey, setNoteSavedHintKey] = useState(null);
+  const [uwNotesByFinding, setUwNotesByFinding] = useState({});
+  const [falsePositiveByFinding, setFalsePositiveByFinding] = useState({});
+  const [noteSavedHintFindingId, setNoteSavedHintFindingId] = useState(null);
   const timeoutRef = useRef(null);
-  const noteSavedTimeoutRef = useRef(null);
+  const debounceSaveRef = useRef(null);
+  const clearSavedHintRef = useRef(null);
 
-  const getFindingNoteKey = (entityId, findingId) => `${entityId}:${findingId}`;
-
-  const handleFindingNoteChange = (entityId, findingId, value) => {
-    setFindingNotes((prev) => ({
-      ...prev,
-      [getFindingNoteKey(entityId, findingId)]: value,
-    }));
+  const handleUwNoteChange = (findingId, value) => {
+    setUwNotesByFinding((prev) => ({ ...prev, [findingId]: value }));
+    if (debounceSaveRef.current) clearTimeout(debounceSaveRef.current);
+    if (clearSavedHintRef.current) clearTimeout(clearSavedHintRef.current);
+    debounceSaveRef.current = setTimeout(() => {
+      setNoteSavedHintFindingId(findingId);
+      clearSavedHintRef.current = setTimeout(
+        () => setNoteSavedHintFindingId(null),
+        1500
+      );
+    }, 500);
   };
 
-  const handleFindingNoteBlur = (entityId, findingId) => {
-    const key = getFindingNoteKey(entityId, findingId);
-    if (noteSavedTimeoutRef.current) clearTimeout(noteSavedTimeoutRef.current);
-    setNoteSavedHintKey(key);
-    noteSavedTimeoutRef.current = setTimeout(() => setNoteSavedHintKey(null), 2000);
+  const handleFalsePositiveChange = (findingId, checked) => {
+    setFalsePositiveByFinding((prev) => ({ ...prev, [findingId]: !!checked }));
   };
 
   const entityHasNotes = useMemo(() => {
     const map = {};
-    Object.keys(findingNotes).forEach((key) => {
-      const [entityId] = key.split(":");
-      if (entityId) map[entityId] = true;
+    Object.entries(FINDINGS_BY_ENTITY).forEach(([entityName, findings]) => {
+      const hasNote = (findings || []).some(
+        (f) => (uwNotesByFinding[f.id] || "").trim().length > 0
+      );
+      if (hasNote) {
+        const entity = entities.find((e) => e.name === entityName);
+        if (entity) map[String(entity.id)] = true;
+      }
     });
     return map;
-  }, [findingNotes]);
+  }, [uwNotesByFinding, entities]);
 
   const allPriorDeals = useMemo(() => {
     const flat = entities.flatMap((entity) => entity.priorDeals || []);
@@ -188,8 +253,18 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
   };
 
   const handleImportPriorFindings = (entity) => {
-    if (importedEntityIds.includes(entity.id)) return;
-    setImportedEntityIds((prev) => [...prev, entity.id]);
+    const key = getEntityKey(entity);
+    const prior = PRIOR_FINDINGS_BY_ENTITY[key] || [];
+    if (!prior.length) return;
+    setImportedFindingsByEntityId((prev) => {
+      const existing = prev[key] || [];
+      const merged = [...existing];
+      prior.forEach((f) => {
+        if (!merged.some((x) => x.id === f.id)) merged.push(f);
+      });
+      return { ...prev, [key]: merged };
+    });
+    setImportedEntityIds((prev) => (prev.includes(key) ? prev : [...prev, key]));
     setSnackbarMessage(`Imported prior findings for ${entity.name}`);
     setSnackbarOpen(true);
   };
@@ -217,10 +292,26 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
 
   const handleBulkImportSelected = () => {
     setBulkImportedDealNames(selectedDealNames);
-    const entityIds = entities.filter((entity) =>
+    const entitiesToImport = entities.filter((entity) =>
       (entity.priorDeals || []).some((pd) => selectedDealNames.includes(pd.dealName))
-    ).map((e) => e.id);
-    setImportedEntityIds(entityIds);
+    );
+    const keys = entitiesToImport.map((e) => getEntityKey(e));
+    setImportedEntityIds(keys);
+    setImportedFindingsByEntityId((prev) => {
+      let next = { ...prev };
+      entitiesToImport.forEach((entity) => {
+        const key = getEntityKey(entity);
+        const prior = PRIOR_FINDINGS_BY_ENTITY[key] || [];
+        if (prior.length === 0) return;
+        const existing = next[key] || [];
+        const merged = [...existing];
+        prior.forEach((f) => {
+          if (!merged.some((x) => x.id === f.id)) merged.push(f);
+        });
+        next = { ...next, [key]: merged };
+      });
+      return next;
+    });
     setSnackbarMessage(`Imported findings from ${selectedDealNames.length} prior deals`);
     setSnackbarOpen(true);
     setBulkDialogOpen(false);
@@ -274,9 +365,10 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
     }
 
     timeoutRef.current = setTimeout(() => {
+      const completedAt = new Date().toISOString();
       setStatus("Completed");
       setLastRun(new Date().toLocaleString());
-      setNewEntitiesDetected(false);
+      setLastRunAt(completedAt);
       if (setEntities) {
         setEntities((prev) =>
           prev.map((e) => ({ ...e, searchStatus: "Complete" }))
@@ -287,9 +379,9 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
 
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (debounceSaveRef.current) clearTimeout(debounceSaveRef.current);
+      if (clearSavedHintRef.current) clearTimeout(clearSavedHintRef.current);
     };
   }, []);
 
@@ -313,6 +405,11 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
     const end = start + rowsPerPage;
     return filteredEntities.slice(start, end);
   }, [filteredEntities, page, rowsPerPage]);
+
+  const isNewBorrowerIntake = (e) =>
+    e.source === "Borrower intake" &&
+    lastRunAt != null &&
+    new Date(e.createdAt).getTime() > new Date(lastRunAt).getTime();
 
   return (
     <Box sx={{ overflowX: "hidden", maxWidth: "100%", minWidth: 0 }}>
@@ -394,10 +491,10 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
               alignItems: { xs: "flex-start", sm: "center" },
               justifyContent: "space-between",
               gap: 2,
-              mb: 2,
+              mb: 1,
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+            <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
               <Typography variant="h6">Associated Entities</Typography>
               <Chip
                 label={
@@ -422,12 +519,12 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
                   component="button"
                   variant="body2"
                   onClick={handleOpenBulkDialog}
-                  sx={{ cursor: "pointer" }}
+                  sx={linkSx}
                 >
                   Manage imports
                 </Link>
               )}
-            </Box>
+            </Stack>
             <Stack direction="row" spacing={1.5} flexWrap="wrap">
               <Button
                 variant="contained"
@@ -443,6 +540,19 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
               )}
             </Stack>
           </Box>
+
+          {setSelectedPage && (
+            <Box sx={{ mt: 0.5, mb: 1 }}>
+              <Link
+                component="button"
+                variant="body2"
+                onClick={() => setSelectedPage("Borrower")}
+                sx={linkSx}
+              >
+                View borrower details
+              </Link>
+            </Box>
+          )}
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
             Coverage: Google · News · Web · LexisNexis Bridger Insight · Sanctions/Watchlists
@@ -460,17 +570,12 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
                   document.getElementById("search-criteria")?.scrollIntoView({ behavior: "smooth", block: "start" });
                 }, 0);
               }}
-              sx={{ cursor: "pointer" }}
+              sx={linkSx}
             >
               View/Edit criteria
             </Link>
           </Box>
 
-          {status === "Completed" && newEntitiesDetected && (
-            <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
-              New entities detected since last screening
-            </Typography>
-          )}
 
           <Box
             sx={{
@@ -545,17 +650,22 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
                   }}
                 >
                   <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        maxWidth: 240,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {entity.name}
-                    </Typography>
+                    <Stack direction="row" alignItems="center" gap={1} sx={{ maxWidth: 280 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          minWidth: 0,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {entity.name}
+                      </Typography>
+                      {isNewBorrowerIntake(entity) && (
+                        <Chip label="New" size="small" color="info" variant="outlined" />
+                      )}
+                    </Stack>
                   </TableCell>
                   <TableCell>{entity.type}</TableCell>
                   <TableCell>
@@ -638,7 +748,7 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" color="text.secondary">
-                      {(FINDINGS_BY_ENTITY[entity.name]?.length ?? 0)}
+                      {((importedFindingsByEntityId[getEntityKey(entity)] || []).length)}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -651,7 +761,7 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    {importedEntityIds.includes(entity.id) ? (
+                    {((importedFindingsByEntityId[getEntityKey(entity)] || []).length > 0 || importedEntityIds.includes(getEntityKey(entity))) ? (
                       <Chip label="Imported" size="small" color="info" />
                     ) : (
                       <Typography variant="body2" color="text.secondary">
@@ -808,102 +918,80 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities }) {
                     </ListItem>
                   ))}
                 </List>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => handleImportPriorFindings(selectedEntity)}
-                  disabled={importedEntityIds.includes(selectedEntity.id)}
-                  sx={{ mb: 2 }}
-                >
-                  Import prior findings
-                </Button>
+                {(() => {
+                  const key = getEntityKey(selectedEntity);
+                  const priorAvailable = PRIOR_FINDINGS_BY_ENTITY[key] || [];
+                  const imported = importedFindingsByEntityId[key] || [];
+                  return (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => handleImportPriorFindings(selectedEntity)}
+                      disabled={priorAvailable.length === 0 || imported.length > 0}
+                      sx={{ mb: 2 }}
+                    >
+                      {imported.length > 0 ? "Imported" : "Import prior findings"}
+                    </Button>
+                  );
+                })()}
               </>
             )}
 
-            {["Medium", "High"].includes(selectedEntity.riskLevel) &&
-            FINDINGS_BY_ENTITY[selectedEntity.name] ? (
-              <Stack spacing={2} sx={{ mb: 3 }}>
-                {FINDINGS_BY_ENTITY[selectedEntity.name].map((finding, index) => {
-                  const findingId = finding.id ?? `finding-${index}`;
-                  const noteKey = getFindingNoteKey(selectedEntity.id, findingId);
-                  const isImported = importedEntityIds.includes(selectedEntity.id);
-                  const sourceLabel = isImported
-                    ? `Prior deal · ${finding.source}`
-                    : finding.source;
-                  return (
-                  <Paper key={findingId} variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      {finding.summary ?? finding.title}
-                      {isImported && (
-                        <Chip
-                          label="Imported"
-                          size="small"
-                          color="info"
-                          sx={{ ml: 1 }}
-                        />
-                      )}
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+              Findings
+            </Typography>
+            {(() => {
+              const key = getEntityKey(selectedEntity);
+              const imported = importedFindingsByEntityId[key] || [];
+              const priorAvailable = PRIOR_FINDINGS_BY_ENTITY[key] || [];
+              return (
+                <>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    Key: {key} · Prior: {priorAvailable.length} · Imported: {imported.length}
+                  </Typography>
+                  {imported.length > 0 ? (
+                    <Stack spacing={1.5} sx={{ mb: 3 }}>
+                      {imported.map((finding) => (
+                    <Paper
+                      key={finding.id}
+                      variant="outlined"
+                      sx={{ p: 1.5, width: "100%", boxSizing: "border-box" }}
+                    >
+                      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
+                        {finding.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                        {finding.type} · {finding.severity} · {finding.sourceDeal} · {finding.date}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-word" }}>
+                        {finding.snippet}
+                      </Typography>
+                      <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.5} sx={{ mt: 1 }}>
+                        {finding.url && (
+                          <Link
+                            href={finding.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={linkSx}
+                          >
+                            Open source
+                          </Link>
+                        )}
+                        {finding.isFalsePositive && (
+                          <Chip label="False positive" size="small" color="default" variant="outlined" />
+                        )}
+                      </Stack>
+                    </Paper>
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                      No additional findings available for this entity.
                     </Typography>
-                    <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                      <Chip
-                        label={finding.category}
-                        size="small"
-                        color={
-                          finding.category === "Litigation"
-                            ? "error"
-                            : finding.category === "Criminal"
-                            ? "warning"
-                            : "info"
-                        }
-                      />
-                      <Chip
-                        label={sourceLabel}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </Stack>
-                    <Box sx={{ mb: 1 }}>
-                      <Link
-                        href={finding.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        underline="hover"
-                      >
-                        View Source
-                      </Link>
-                    </Box>
-                    <Stack spacing={1}>
-                      <FormControlLabel
-                        control={<Switch size="small" />}
-                        label="Mark as False Positive"
-                      />
-                      <TextField
-                        label="UW note (shared across deals)"
-                        helperText="Add context for future underwriting reviews."
-                        multiline
-                        minRows={2}
-                        size="small"
-                        fullWidth
-                        value={findingNotes[noteKey] ?? ""}
-                        onChange={(e) =>
-                          handleFindingNoteChange(selectedEntity.id, findingId, e.target.value)
-                        }
-                        onBlur={() => handleFindingNoteBlur(selectedEntity.id, findingId)}
-                      />
-                      {noteSavedHintKey === noteKey && (
-                        <Typography variant="caption" color="success.main">
-                          Saved
-                        </Typography>
-                      )}
-                    </Stack>
-                  </Paper>
-                  );
-                })}
-              </Stack>
-            ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                No additional findings available for this entity.
-              </Typography>
-            )}
+                  )}
+                </>
+              );
+            })()}
 
             <Box sx={{ mt: "auto" }}>
               <Button
