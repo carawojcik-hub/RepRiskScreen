@@ -1,0 +1,46 @@
+%% System context diagram: Reputation Risk Screening Tool (Prototype)
+%% High-level actors, system boundary, external sources, institutional memory, and flows.
+
+flowchart TB
+  subgraph actor[" "]
+    A["Underwriter / Analyst"]
+  end
+
+  subgraph system["Reputation Risk Screening Tool (Prototype)"]
+    B["Borrower Intake & Entity Setup"]
+    C["Screening Workflow"]
+    D["Entity Review Drawer"]
+    E["Import Prior Findings"]
+    F["Deal Outputs<br/>(notes + decision rationale)"]
+  end
+
+  subgraph external["External Sources"]
+    G["Google / Web Search"]
+    H["LexisNexis Bridger Insight"]
+  end
+
+  subgraph memory["Institutional Memory Store"]
+    I["Prior Deal History"]
+    J["Prior Findings Repository"]
+  end
+
+  %% Flows
+  A -->|uses| B
+  A -->|runs| C
+  A -->|reviews in| D
+  C -->|queries| G
+  C -->|queries| H
+  E -->|pulls from| I
+  E -->|pulls from| J
+  A -->|triggers| E
+  D -->|produces| F
+
+  %% Styling
+  classDef actorClass fill:#e1f5fe,stroke:#01579b
+  classDef systemClass fill:#e8f5e9,stroke:#1b5e20
+  classDef externalClass fill:#fff3e0,stroke:#e65100
+  classDef memoryClass fill:#f3e5f5,stroke:#4a148c
+  class A actorClass
+  class B,C,D,E,F systemClass
+  class G,H externalClass
+  class I,J memoryClass

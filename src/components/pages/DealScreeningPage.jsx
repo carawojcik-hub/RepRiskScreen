@@ -8,16 +8,19 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   Drawer,
   FormControlLabel,
   FormGroup,
   Grid,
+  IconButton,
   Link,
   List,
   ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  MenuItem,
   Paper,
   Snackbar,
   Stack,
@@ -32,9 +35,13 @@ import {
   Tabs,
   Tab,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CloseIcon from "@mui/icons-material/Close";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
 const DEFAULT_TERMS = [
   "Litigation",
@@ -89,7 +96,8 @@ const PRIOR_FINDINGS_BY_ENTITY = {
       type: "Adverse Media",
       severity: "Medium",
       title: "Civil litigation referenced in local coverage",
-      snippet: "Mentions related to contractor dispute; no enforcement action found.",
+      snippet:
+        "Mentions related to contractor dispute; no enforcement action found.",
       url: "https://example.com/article",
     },
     {
@@ -145,7 +153,12 @@ const linkSx = {
   "&:visited": { color: "primary.main" },
 };
 
-function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSelectedPage }) {
+function DealScreeningPage({
+  onBackToPipeline,
+  entities = [],
+  setEntities,
+  setSelectedPage,
+}) {
   const [status, setStatus] = useState("Not Started");
   const [lastRun, setLastRun] = useState("");
   const [lastRunAt, setLastRunAt] = useState(null);
@@ -160,7 +173,11 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [activeTab, setActiveTab] = useState(0);
   const [importedEntityIds, setImportedEntityIds] = useState([]);
-  const [importedFindingsByEntityId, setImportedFindingsByEntityId] = useState({});
+  const [importedFindingsByEntityId, setImportedFindingsByEntityId] = useState(
+    {}
+  );
+  const [runFindingsByEntityId, setRunFindingsByEntityId] = useState({});
+  const [findingStateById, setFindingStateById] = useState({});
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
@@ -190,19 +207,87 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
     setFalsePositiveByFinding((prev) => ({ ...prev, [findingId]: !!checked }));
   };
 
-  const entityHasNotes = useMemo(() => {
+  const getFindingsForEntity = (entity) => {
+    if (!entity) return [];
+    const key = getEntityKey(entity);
+    return [
+      ...(runFindingsByEntityId[key] || []),
+      ...(importedFindingsByEntityId[key] || []),
+    ];
+  };
+
+  const notesCountByEntityKey = useMemo(() => {
     const map = {};
-    Object.entries(FINDINGS_BY_ENTITY).forEach(([entityName, findings]) => {
-      const hasNote = (findings || []).some(
-        (f) => (uwNotesByFinding[f.id] || "").trim().length > 0
-      );
-      if (hasNote) {
-        const entity = entities.find((e) => e.name === entityName);
-        if (entity) map[String(entity.id)] = true;
-      }
+    const list = Array.isArray(entities) ? entities : [];
+    list.forEach((entity) => {
+      const key = getEntityKey(entity);
+      const findings = getFindingsForEntity(entity);
+      const count = findings.reduce((n, f) => {
+        const note = (uwNotesByFinding[f.id] || "").trim();
+        return n + (note.length > 0 ? 1 : 0);
+      }, 0);
+      map[key] = count;
     });
     return map;
-  }, [uwNotesByFinding, entities]);
+  }, [entities, uwNotesByFinding, runFindingsByEntityId, importedFindingsByEntityId]);
+
+  const getImportedFindingsForEntity = (entity) => {
+    if (!entity) return [];
+    const key = getEntityKey(entity);
+    return importedFindingsByEntityId[key] || [];
+  };
+
+  const computeRiskFromFindings = (findings) => {
+    if (!findings || findings.length === 0) return null;
+    let best = "Low";
+    let maxRank = -1;
+    findings.forEach((f) => {
+      const sev = f.severity || "Medium";
+      const rank = sev === "High" ? 2 : sev === "Medium" ? 1 : 0;
+      if (rank > maxRank) {
+        maxRank = rank;
+        best = sev === "High" ? "High" : sev === "Medium" ? "Medium" : "Low";
+      }
+    });
+    return best;
+  };
+
+  /** Pick entity for "new run findings" demo: no prior deals, no prior findings in PRIOR_FINDINGS_BY_ENTITY. */
+  const getTargetEntityForRunFindings = (entityList) => {
+    if (!entityList?.length) return null;
+    const withNoPrior =
+      entityList.find(
+        (e) =>
+          (e.priorDeals?.length ?? 0) === 0 &&
+          (PRIOR_FINDINGS_BY_ENTITY[getEntityKey(e)] || []).length === 0
+      ) ?? null;
+    return withNoPrior ?? entityList[0];
+  };
+
+  const entityNeedsReview = (entity) => {
+    const findings = getFindingsForEntity(entity);
+    if (!findings.length) return false;
+    return findings.some(
+      (f) => (findingStateById[f.id]?.triage ?? "Unreviewed") === "Unreviewed"
+    );
+  };
+
+  const handleFindingTriageChange = (findingId, triage) => {
+    setFindingStateById((prev) => {
+      const prevState = prev[findingId] || {
+        triage: "Unreviewed",
+        triagedAt: undefined,
+      };
+      return {
+        ...prev,
+        [findingId]: {
+          ...prevState,
+          triage,
+          triagedAt: triage !== "Unreviewed" ? new Date().toISOString() : undefined,
+        },
+      };
+    });
+  };
 
   const allPriorDeals = useMemo(() => {
     const flat = entities.flatMap((entity) => entity.priorDeals || []);
@@ -227,11 +312,7 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
   const handleAddTerm = () => {
     const trimmed = currentTerm.trim();
     if (!trimmed) return;
-    if (
-      customTerms.some(
-        (term) => term.toLowerCase() === trimmed.toLowerCase()
-      )
-    ) {
+    if (customTerms.some((term) => term.toLowerCase() === trimmed.toLowerCase())) {
       setCurrentTerm("");
       return;
     }
@@ -256,6 +337,7 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
     const key = getEntityKey(entity);
     const prior = PRIOR_FINDINGS_BY_ENTITY[key] || [];
     if (!prior.length) return;
+
     setImportedFindingsByEntityId((prev) => {
       const existing = prev[key] || [];
       const merged = [...existing];
@@ -264,6 +346,15 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
       });
       return { ...prev, [key]: merged };
     });
+
+    setFindingStateById((prev) => {
+      const next = { ...prev };
+      prior.forEach((f) => {
+        if (!next[f.id]) next[f.id] = { triage: "Unreviewed", triagedAt: undefined };
+      });
+      return next;
+    });
+
     setImportedEntityIds((prev) => (prev.includes(key) ? prev : [...prev, key]));
     setSnackbarMessage(`Imported prior findings for ${entity.name}`);
     setSnackbarOpen(true);
@@ -284,19 +375,20 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
 
   const handleBulkDealToggle = (dealName) => {
     setSelectedDealNames((prev) =>
-      prev.includes(dealName)
-        ? prev.filter((n) => n !== dealName)
-        : [...prev, dealName]
+      prev.includes(dealName) ? prev.filter((n) => n !== dealName) : [...prev, dealName]
     );
   };
 
   const handleBulkImportSelected = () => {
     setBulkImportedDealNames(selectedDealNames);
+
     const entitiesToImport = entities.filter((entity) =>
       (entity.priorDeals || []).some((pd) => selectedDealNames.includes(pd.dealName))
     );
+
     const keys = entitiesToImport.map((e) => getEntityKey(e));
     setImportedEntityIds(keys);
+
     setImportedFindingsByEntityId((prev) => {
       let next = { ...prev };
       entitiesToImport.forEach((entity) => {
@@ -312,6 +404,20 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
       });
       return next;
     });
+
+    const allPriorFindings = entitiesToImport.flatMap((entity) => {
+      const key = getEntityKey(entity);
+      return PRIOR_FINDINGS_BY_ENTITY[key] || [];
+    });
+
+    setFindingStateById((prev) => {
+      const next = { ...prev };
+      allPriorFindings.forEach((f) => {
+        if (!next[f.id]) next[f.id] = { triage: "Unreviewed", triagedAt: undefined };
+      });
+      return next;
+    });
+
     setSnackbarMessage(`Imported findings from ${selectedDealNames.length} prior deals`);
     setSnackbarOpen(true);
     setBulkDialogOpen(false);
@@ -353,26 +459,75 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
         prev.map((e) => ({
           ...e,
           searchStatus:
-            (e.searchStatus || "").toLowerCase().includes("complete")
-              ? e.searchStatus
-              : "In Progress",
+            (e.searchStatus || "").toLowerCase().includes("complete") ? e.searchStatus : "In Progress",
         }))
       );
     }
 
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     timeoutRef.current = setTimeout(() => {
       const completedAt = new Date().toISOString();
       setStatus("Completed");
       setLastRun(new Date().toLocaleString());
       setLastRunAt(completedAt);
+
+      const targetEntity = getTargetEntityForRunFindings(entities);
+      const targetKey = targetEntity ? getEntityKey(targetEntity) : null;
+
       if (setEntities) {
         setEntities((prev) =>
-          prev.map((e) => ({ ...e, searchStatus: "Complete" }))
+          prev.map((e) => {
+            const eKey = getEntityKey(e);
+            const runCount = (runFindingsByEntityId[eKey] || []).length;
+            const importedCount = (importedFindingsByEntityId[eKey] || []).length;
+            const willHaveFindings = runCount > 0 || importedCount > 0 || eKey === targetKey;
+            const riskLevel = willHaveFindings ? (e.riskLevel ?? "Low") : "Low";
+            return { ...e, searchStatus: "Complete", riskLevel };
+          })
         );
+      }
+
+      if (targetKey) {
+        const key = targetKey;
+        const today = new Date().toISOString().slice(0, 10);
+        const materialFindings = [
+          {
+            id: `run-material-1-${key}`,
+            sourceDeal: "Current deal",
+            date: today,
+            type: "Adverse Media",
+            severity: "High",
+            title: "Adverse media coverage involving related party",
+            snippet:
+              "Recent coverage references regulatory inquiry and litigation; recommend further due diligence and sponsor disclosure for underwriting.",
+            url: "https://example.com/adverse-media-coverage",
+            isFalsePositive: false,
+          },
+          {
+            id: `run-material-2-${key}`,
+            sourceDeal: "Current deal",
+            date: today,
+            type: "Regulatory",
+            severity: "Medium",
+            title: "State filing discrepancy flagged",
+            snippet:
+              "Entity name and address mismatch in secretary of state records; may require verification and explanation from borrower.",
+            attachmentName: "SOS filing excerpt.pdf",
+            attachmentUrl: "/demo/sos-filing-excerpt.pdf",
+            isFalsePositive: false,
+          },
+        ];
+
+        setRunFindingsByEntityId((prev) => ({ ...prev, [key]: materialFindings }));
+
+        setFindingStateById((prev) => {
+          const next = { ...prev };
+          materialFindings.forEach((f) => {
+            if (!next[f.id]) next[f.id] = { triage: "Unreviewed", triagedAt: undefined };
+          });
+          return next;
+        });
       }
     }, 2000);
   };
@@ -389,16 +544,11 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
     const query = searchQuery.trim().toLowerCase();
 
     return entities.filter((entity) => {
-      const matchesQuery = query
-        ? entity.name.toLowerCase().includes(query)
-        : true;
-      const matchesFlagged = showOnlyFlagged
-        ? entity.riskLevel === "Medium" || entity.riskLevel === "High"
-        : true;
-
+      const matchesQuery = query ? entity.name.toLowerCase().includes(query) : true;
+      const matchesFlagged = showOnlyFlagged ? getFindingsForEntity(entity).length > 0 : true;
       return matchesQuery && matchesFlagged;
     });
-  }, [entities, searchQuery, showOnlyFlagged]);
+  }, [entities, searchQuery, showOnlyFlagged, runFindingsByEntityId, importedFindingsByEntityId]);
 
   const pagedEntities = useMemo(() => {
     const start = page * rowsPerPage;
@@ -410,6 +560,14 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
     e.source === "Borrower intake" &&
     lastRunAt != null &&
     new Date(e.createdAt).getTime() > new Date(lastRunAt).getTime();
+
+  const stickyFirstColSx = {
+    position: "sticky",
+    left: 0,
+    zIndex: 2,
+    backgroundColor: "background.paper",
+    boxShadow: "inset 1px 0 0 0 rgba(0,0,0,0.06)",
+  };
 
   return (
     <Box sx={{ overflowX: "hidden", maxWidth: "100%", minWidth: 0 }}>
@@ -428,12 +586,7 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
           borderColor: "divider",
         }}
       >
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-        >
+        <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
           <Tab label="Deal Summary" />
           <Tab label="Associated Entities" />
           <Tab label="Search Criteria" />
@@ -450,33 +603,25 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
               <Typography variant="caption" color="text.secondary">
                 Deal Name
               </Typography>
-              <Typography variant="subtitle1">
-                Sunset Villas Acquisition
-              </Typography>
+              <Typography variant="subtitle1">Sunset Villas Acquisition</Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary">
                 Borrower
               </Typography>
-              <Typography variant="subtitle1">
-                Sunset Holdings LLC
-              </Typography>
+              <Typography variant="subtitle1">Sunset Holdings LLC</Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary">
                 Loan Amount
               </Typography>
-              <Typography variant="subtitle1">
-                $45,000,000
-              </Typography>
+              <Typography variant="subtitle1">$45,000,000</Typography>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Typography variant="caption" color="text.secondary">
                 Stage
               </Typography>
-              <Typography variant="subtitle1">
-                Underwriting
-              </Typography>
+              <Typography variant="subtitle1">Underwriting</Typography>
             </Grid>
           </Grid>
         </Paper>
@@ -498,39 +643,16 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
               <Typography variant="h6">Associated Entities</Typography>
               <Chip
                 label={
-                  status === "Not Started"
-                    ? "Not yet run"
-                    : status === "Running"
-                    ? "Running"
-                    : "Completed"
+                  status === "Not Started" ? "Not yet run" : status === "Running" ? "Running" : "Completed"
                 }
-                color={
-                  status === "Not Started"
-                    ? "default"
-                    : status === "Completed"
-                    ? "success"
-                    : "warning"
-                }
+                color={status === "Not Started" ? "default" : status === "Completed" ? "success" : "warning"}
                 size="small"
                 variant={status === "Not Started" ? "outlined" : "filled"}
               />
-              {bulkImportedDealNames.length > 0 && (
-                <Link
-                  component="button"
-                  variant="body2"
-                  onClick={handleOpenBulkDialog}
-                  sx={linkSx}
-                >
-                  Manage imports
-                </Link>
-              )}
             </Stack>
+
             <Stack direction="row" spacing={1.5} flexWrap="wrap">
-              <Button
-                variant="contained"
-                onClick={handleRunClick}
-                disabled={status === "Running"}
-              >
+              <Button variant="contained" onClick={handleRunClick} disabled={status === "Running"}>
                 {status === "Not Started" ? "Run Screening" : "Re-Run Screening"}
               </Button>
               {allPriorDeals.length > 0 && (
@@ -541,22 +663,10 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
             </Stack>
           </Box>
 
-          {setSelectedPage && (
-            <Box sx={{ mt: 0.5, mb: 1 }}>
-              <Link
-                component="button"
-                variant="body2"
-                onClick={() => setSelectedPage("Borrower")}
-                sx={linkSx}
-              >
-                View borrower details
-              </Link>
-            </Box>
-          )}
-
           <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
             Coverage: Google · News · Web · LexisNexis Bridger Insight · Sanctions/Watchlists
           </Typography>
+
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 2 }}>
             <Typography variant="body2" color="text.secondary">
               Criteria: {DEFAULT_TERMS.length} default · {customTerms.length} custom
@@ -567,7 +677,10 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
               onClick={() => {
                 setActiveTab(2);
                 setTimeout(() => {
-                  document.getElementById("search-criteria")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  document.getElementById("search-criteria")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
                 }, 0);
               }}
               sx={linkSx}
@@ -575,7 +688,6 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
               View/Edit criteria
             </Link>
           </Box>
-
 
           <Box
             sx={{
@@ -587,133 +699,171 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
               justifyContent: "space-between",
             }}
           >
-          <TextField
-            label="Search entities"
-            size="small"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            sx={{ maxWidth: 320 }}
-          />
-          <Box
+            <TextField
+              label="Search entities"
+              size="small"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              sx={{ maxWidth: 320 }}
+            />
+
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: { xs: "row", sm: "row" },
+                alignItems: "center",
+                justifyContent: { xs: "space-between", sm: "flex-end" },
+                gap: 2,
+              }}
+            >
+              <FormControlLabel
+                control={<Switch size="small" checked={showOnlyFlagged} onChange={handleFlaggedToggle} />}
+                label="Show entities with findings"
+              />
+              <Typography variant="caption" color="text.secondary">
+                {`Showing ${filteredEntities.length} of ${entities.length} entities`}
+              </Typography>
+            </Box>
+          </Box>
+
+          <TableContainer
+            component={Paper}
+            variant="outlined"
             sx={{
-              display: "flex",
-              flexDirection: { xs: "row", sm: "row" },
-              alignItems: "center",
-              justifyContent: { xs: "space-between", sm: "flex-end" },
-              gap: 2,
+              width: "100%",
+              overflowX: "auto",
+              position: "relative",
+              "&::-webkit-scrollbar": { height: 8 },
+              "&::-webkit-scrollbar-track": { backgroundColor: "transparent" },
+              "&::-webkit-scrollbar-thumb": { backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 4 },
+              "&::-webkit-scrollbar-thumb:hover": { backgroundColor: "rgba(0,0,0,0.35)" },
             }}
           >
-            <FormControlLabel
-              control={
-                <Switch
-                  size="small"
-                  checked={showOnlyFlagged}
-                  onChange={handleFlaggedToggle}
-                />
-              }
-              label="Show only flagged"
-            />
-            <Typography variant="caption" color="text.secondary">
-              {`Showing ${filteredEntities.length} of ${entities.length} entities`}
-            </Typography>
-          </Box>
-        </Box>
+            <Table sx={{ tableLayout: "fixed", width: "100%" }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell
+                    data-sticky="entity"
+                    sx={{
+                      ...stickyFirstColSx,
+                      width: 220,
+                      color: "text.secondary",
+                      fontWeight: 600,
+                      fontSize: "0.875rem",
+                      zIndex: 3,
+                    }}
+                  >
+                    <Box sx={{ position: "relative", zIndex: 1 }}>Entity Name</Box>
+                  </TableCell>
 
-        <TableContainer component={Paper} variant="outlined" sx={{ width: "100%", overflowX: "auto" }}>
-          <Table sx={{ tableLayout: "fixed", width: "100%" }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Entity Name</TableCell>
-                <TableCell>Entity Type</TableCell>
-                <TableCell>Source</TableCell>
-                <TableCell>Search Status</TableCell>
-                <TableCell>Risk Level</TableCell>
-                <TableCell>Prior Screening</TableCell>
-                <TableCell>Prior deal history</TableCell>
-                <TableCell>Findings</TableCell>
-                <TableCell>UW Notes</TableCell>
-                <TableCell sx={{ width: 100 }}>Imported</TableCell>
-                <TableCell align="right">Details</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {pagedEntities.map((entity) => (
-                <TableRow
-                  key={entity.id}
-                  hover
-                  onClick={() => handleRowClick(entity)}
-                  sx={{
-                    cursor: "pointer",
-                    "&:hover": {
-                      bgcolor: "action.hover",
-                    },
-                  }}
-                >
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" gap={1} sx={{ maxWidth: 280 }}>
-                      <Typography
-                        variant="body2"
+                  <TableCell sx={{ width: 140, color: "text.secondary", fontWeight: 600, fontSize: "0.875rem" }}>
+                    Entity Type
+                  </TableCell>
+                  <TableCell sx={{ width: 140, color: "text.secondary", fontWeight: 600, fontSize: "0.875rem" }}>
+                    Source
+                  </TableCell>
+                  <TableCell sx={{ width: 110, color: "text.secondary", fontWeight: 600, fontSize: "0.875rem" }}>
+                    Risk Level
+                  </TableCell>
+                  <TableCell sx={{ width: 110, color: "text.secondary", fontWeight: 600, fontSize: "0.875rem" }}>
+                    Findings
+                  </TableCell>
+                  <TableCell sx={{ width: 80, color: "text.secondary", fontWeight: 600, fontSize: "0.875rem" }}>
+                    Notes
+                  </TableCell>
+                  <TableCell sx={{ width: 120, color: "text.secondary", fontWeight: 600, fontSize: "0.875rem" }}>
+                    Prior Screening
+                  </TableCell>
+                  <TableCell sx={{ width: 160, color: "text.secondary", fontWeight: 600, fontSize: "0.875rem" }}>
+                    Prior deal history
+                  </TableCell>
+                  <TableCell sx={{ width: 110, color: "text.secondary", fontWeight: 600, fontSize: "0.875rem" }}>
+                    Imported
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {pagedEntities.map((entity) => (
+                  <TableRow
+                    key={entity.id}
+                    hover
+                    tabIndex={0}
+                    role="button"
+                    onClick={() => handleRowClick(entity)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleRowClick(entity);
+                      }
+                    }}
+                    sx={{
+                      cursor: "pointer",
+                      transition: "background-color 150ms ease",
+                      "&:hover": {
+                        bgcolor: (theme) => theme.palette.grey[100],
+                        boxShadow: "inset 4px 0 0 0 rgba(25, 118, 210, 0.6)",
+                        "& .rowChevron": { opacity: 1 },
+                      },
+                      "&:hover > td": {
+                        backgroundColor: (theme) => theme.palette.grey[100],
+                      },
+                      "&:hover > td[data-sticky='entity']": {
+                        backgroundColor: (theme) => theme.palette.grey[100],
+                      },
+                      "&:focus-visible": {
+                        outline: "2px solid",
+                        outlineColor: "primary.main",
+                        outlineOffset: "-2px",
+                      },
+                      "&:focus-visible > td[data-sticky='entity']": {
+                        backgroundColor: (theme) => theme.palette.grey[100],
+                      },
+                    }}
+                  >
+                    <TableCell data-sticky="entity" sx={{ ...stickyFirstColSx, width: 220 }}>
+                      <Box
                         sx={{
+                          position: "relative",
+                          zIndex: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 1,
+                          maxWidth: 280,
                           minWidth: 0,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
                         }}
                       >
-                        {entity.name}
-                      </Typography>
-                      {isNewBorrowerIntake(entity) && (
-                        <Chip label="New" size="small" color="info" variant="outlined" />
-                      )}
-                    </Stack>
-                  </TableCell>
-                  <TableCell>{entity.type}</TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{
-                        maxWidth: 200,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {entity.source ?? "—"}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {status === "Not Started" ? (
-                      <Chip label="Not run" size="small" color="default" variant="outlined" />
-                    ) : status === "Running" ? (
-                      <Chip label="Running" size="small" color="warning" />
-                    ) : (
-                      <Chip
-                        label={entity.searchStatus}
-                        color={
-                          entity.searchStatus === "Complete" ? "success" : "warning"
-                        }
-                        size="small"
-                      />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={entity.riskLevel}
-                      color={RISK_COLOR[entity.riskLevel]}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>{entity.priorScreening}</TableCell>
-                  <TableCell>
-                    {(!entity.priorDeals || entity.priorDeals.length === 0) && (
-                      <Typography variant="body2" color="text.secondary">
-                        —
-                      </Typography>
-                    )}
-                    {entity.priorDeals && entity.priorDeals.length === 1 && (
+                        <Stack direction="row" alignItems="center" gap={1} sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              minWidth: 0,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {entity.name}
+                          </Typography>
+                          {isNewBorrowerIntake(entity) && (
+                            <Chip label="New" size="small" color="info" variant="outlined" />
+                          )}
+                        </Stack>
+                        <ArrowForwardIosIcon
+                          className="rowChevron"
+                          fontSize="inherit"
+                          sx={{ opacity: 0, flexShrink: 0 }}
+                        />
+                      </Box>
+                    </TableCell>
+
+                    <TableCell>{entity.type}</TableCell>
+
+                    <TableCell>
                       <Typography
                         variant="body2"
+                        color="text.secondary"
                         sx={{
                           maxWidth: 200,
                           whiteSpace: "nowrap",
@@ -721,13 +871,140 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
                           textOverflow: "ellipsis",
                         }}
                       >
-                        {entity.priorDeals[0].dealName}
+                        {entity.source ?? "—"}
                       </Typography>
-                    )}
-                    {entity.priorDeals && entity.priorDeals.length > 1 && (
-                      <>
+                    </TableCell>
+
+                    <TableCell>
+                      {status !== "Not Started" ? (
+                        entity.riskLevel ? (
+                          <Chip
+                            label={entity.riskLevel}
+                            color={RISK_COLOR[entity.riskLevel] ?? "default"}
+                            size="small"
+                            sx={{ fontWeight: 600 }}
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            —
+                          </Typography>
+                        )
+                      ) : (() => {
+                          const imported = getImportedFindingsForEntity(entity);
+                          if (!imported.length) {
+                            return (
+                              <Typography variant="body2" color="text.secondary">
+                                —
+                              </Typography>
+                            );
+                          }
+                          const previewRisk = computeRiskFromFindings(imported);
+                          if (!previewRisk) {
+                            return (
+                              <Typography variant="body2" color="text.secondary">
+                                —
+                              </Typography>
+                            );
+                          }
+                          return (
+                            <Chip
+                              label={previewRisk}
+                              color={RISK_COLOR[previewRisk] ?? "default"}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontWeight: 600 }}
+                            />
+                          );
+                        })()}
+                    </TableCell>
+
+                    <TableCell>
+                      {(() => {
+                        if (lastRunAt == null) {
+                          return (
+                            <Typography variant="body2" color="text.secondary">
+                              Not screened
+                            </Typography>
+                          );
+                        }
+                        const addedAfterLastRun =
+                          entity.createdAt &&
+                          new Date(entity.createdAt).getTime() > new Date(lastRunAt).getTime();
+                        if (addedAfterLastRun) {
+                          return (
+                            <Stack direction="row" alignItems="center" spacing={0.75}>
+                              <Typography variant="body2" color="text.secondary">
+                                Not screened
+                              </Typography>
+                              <Chip label="New" size="small" variant="outlined" color="default" />
+                            </Stack>
+                          );
+                        }
+                        const findings = getFindingsForEntity(entity);
+                        const count = findings.length;
+                        const needsReview = count > 0 && entityNeedsReview(entity);
+                        if (count === 0) {
+                          return (
+                            <Typography variant="body2" color="text.secondary">
+                              —
+                            </Typography>
+                          );
+                        }
+                        return (
+                          <Stack direction="row" alignItems="center" spacing={0.75}>
+                            <Typography variant="body2" color="text.secondary">
+                              {count}
+                            </Typography>
+                            <Tooltip title={needsReview ? "Needs review" : "Reviewed"}>
+                              {needsReview ? (
+                                <ErrorOutlineIcon fontSize="small" color="warning" />
+                              ) : (
+                                <CheckCircleOutlineIcon fontSize="small" color="success" />
+                              )}
+                            </Tooltip>
+                          </Stack>
+                        );
+                      })()}
+                    </TableCell>
+
+                    <TableCell>
+                      {(() => {
+                        const key = getEntityKey(entity);
+                        const n = notesCountByEntityKey[key] || 0;
+                        if (n === 0) {
+                          return (
+                            <Typography variant="body2" color="text.secondary">
+                              —
+                            </Typography>
+                          );
+                        }
+                        return <Chip label={`${n}`} size="small" color="info" variant="outlined" />;
+                      })()}
+                    </TableCell>
+
+                    <TableCell>
+                      {(() => {
+                        const key = getEntityKey(entity);
+                        const hasPriorScreening =
+                          (entity.priorDeals && entity.priorDeals.length > 0) || importedEntityIds.includes(key);
+                        return (
+                          <Typography variant="body2" color="text.secondary">
+                            {hasPriorScreening ? "Yes" : "No"}
+                          </Typography>
+                        );
+                      })()}
+                    </TableCell>
+
+                    <TableCell>
+                      {(!entity.priorDeals || entity.priorDeals.length === 0) && (
+                        <Typography variant="body2" color="text.secondary">
+                          —
+                        </Typography>
+                      )}
+                      {entity.priorDeals && entity.priorDeals.length === 1 && (
                         <Typography
                           variant="body2"
+                          color="text.secondary"
                           sx={{
                             maxWidth: 200,
                             whiteSpace: "nowrap",
@@ -737,69 +1014,53 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
                         >
                           {entity.priorDeals[0].dealName}
                         </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                        >
-                          {`(+${entity.priorDeals.length - 1} more)`}
-                        </Typography>
-                      </>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {((importedFindingsByEntityId[getEntityKey(entity)] || []).length)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {entityHasNotes[String(entity.id)] ? (
-                      <Chip label="Notes" size="small" color="info" variant="outlined" />
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        —
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {((importedFindingsByEntityId[getEntityKey(entity)] || []).length > 0 || importedEntityIds.includes(getEntityKey(entity))) ? (
-                      <Chip label="Imported" size="small" color="info" />
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        —
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button
-                      size="small"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleRowClick(entity);
-                      }}
-                      endIcon={
-                        <ArrowForwardIosIcon
-                          fontSize="inherit"
-                        />
-                      }
-                    >
-                      View
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                      )}
+                      {entity.priorDeals && entity.priorDeals.length > 1 && (
+                        <>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              maxWidth: 200,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {entity.priorDeals[0].dealName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {`(+${entity.priorDeals.length - 1} more)`}
+                          </Typography>
+                        </>
+                      )}
+                    </TableCell>
 
-        <TablePagination
-          component="div"
-          count={filteredEntities.length}
-          page={page}
-          onPageChange={handleChangePage}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
+                    <TableCell>
+                      {(importedFindingsByEntityId[getEntityKey(entity)] || []).length > 0 ||
+                      importedEntityIds.includes(getEntityKey(entity)) ? (
+                        <Chip label="Imported" size="small" color="info" variant="outlined" />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          —
+                        </Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <TablePagination
+            component="div"
+            count={filteredEntities.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[10, 25, 50]}
+          />
         </Paper>
       </Box>
 
@@ -810,32 +1071,18 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
           </Typography>
 
           <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: "block", mb: 1 }}
-            >
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
               Default Terms
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap" rowGap={1}>
               {DEFAULT_TERMS.map((term) => (
-                <Chip
-                  key={term}
-                  label={term}
-                  variant="outlined"
-                  color="primary"
-                  size="small"
-                />
+                <Chip key={term} label={term} variant="outlined" color="primary" size="small" />
               ))}
             </Stack>
           </Box>
 
           <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: "block", mb: 1 }}
-            >
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
               Custom Terms
             </Typography>
             <Stack
@@ -859,20 +1106,11 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
                 Add
               </Button>
             </Stack>
+
             {customTerms.length > 0 && (
-              <Stack
-                direction="row"
-                spacing={1}
-                flexWrap="wrap"
-                rowGap={1}
-              >
+              <Stack direction="row" spacing={1} flexWrap="wrap" rowGap={1}>
                 {customTerms.map((term) => (
-                  <Chip
-                    key={term}
-                    label={term}
-                    size="small"
-                    onDelete={() => handleRemoveTerm(term)}
-                  />
+                  <Chip key={term} label={term} size="small" onDelete={() => handleRemoveTerm(term)} />
                 ))}
               </Stack>
             )}
@@ -885,122 +1123,274 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
         open={drawerOpen}
         onClose={handleDrawerClose}
         PaperProps={{
-          sx: { width: { xs: "100%", sm: 380 }, p: 3 },
+          sx: {
+            width: { xs: "100%", sm: 680 },
+            maxWidth: "100%",
+            p: 0,
+            display: "flex",
+            flexDirection: "column",
+          },
         }}
       >
         {selectedEntity && (
-          <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              {selectedEntity.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {selectedEntity.type} · Reputation findings
-            </Typography>
-
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              Entity History
-            </Typography>
-            {(!selectedEntity.priorDeals || selectedEntity.priorDeals.length === 0) ? (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                No prior screening history found for this entity.
-              </Typography>
-            ) : (
-              <>
-                <List dense disablePadding sx={{ mb: 1 }}>
-                  {selectedEntity.priorDeals.map((deal) => (
-                    <ListItem key={deal.dealName} disablePadding sx={{ py: 0.25 }}>
-                      <ListItemText
-                        primary={deal.dealName}
-                        secondary={`${deal.closeDate} · ${deal.screeningDate} · ${deal.outcomeSummary}`}
-                        primaryTypographyProps={{ variant: "body2" }}
-                        secondaryTypographyProps={{ variant: "caption", color: "text.secondary" }}
+          <Box sx={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <Box
+              sx={{
+                position: "sticky",
+                top: 0,
+                zIndex: 1,
+                bgcolor: "background.paper",
+                px: 3,
+                pt: 3,
+                pb: 2,
+                borderBottom: 1,
+                borderColor: "divider",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                  <Typography variant="h6" fontWeight={600}>
+                    {selectedEntity.name}
+                  </Typography>
+                  {(() => {
+                    const allFindings = getFindingsForEntity(selectedEntity);
+                    const headerRisk = computeRiskFromFindings(allFindings);
+                    if (!headerRisk) {
+                      return (
+                        <Typography component="span" variant="body2" color="text.secondary">
+                          —
+                        </Typography>
+                      );
+                    }
+                    return (
+                      <Chip
+                        label={headerRisk}
+                        size="small"
+                        variant="outlined"
+                        color={RISK_COLOR[headerRisk] ?? "default"}
+                        sx={{ fontWeight: 600, px: 1 }}
                       />
-                    </ListItem>
-                  ))}
-                </List>
+                    );
+                  })()}
+                </Stack>
+
+                <IconButton size="small" onClick={handleDrawerClose} aria-label="Close">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {selectedEntity.type} · Reputation findings
+              </Typography>
+
+              {lastRunAt && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                  Last screened {new Date(lastRunAt).toLocaleString()}
+                </Typography>
+              )}
+            </Box>
+
+            <Box sx={{ flex: 1, overflowY: "auto", px: 3, py: 3 }}>
+              <Typography
+                variant="subtitle2"
+                fontWeight={600}
+                color="text.secondary"
+                sx={{ display: "block", mb: 1 }}
+              >
+                Entity History
+              </Typography>
+
+              {!selectedEntity.priorDeals || selectedEntity.priorDeals.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  No prior screening history found for this entity.
+                </Typography>
+              ) : (
+                <>
+                  <List dense disablePadding sx={{ mb: 1 }}>
+                    {selectedEntity.priorDeals.map((deal) => (
+                      <ListItem key={deal.dealName} disablePadding sx={{ py: 0.25 }}>
+                        <ListItemText
+                          primary={deal.dealName}
+                          secondary={`${deal.closeDate} · ${deal.screeningDate} · ${deal.outcomeSummary}`}
+                          primaryTypographyProps={{ variant: "body2" }}
+                          secondaryTypographyProps={{ variant: "caption", color: "text.secondary" }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+
+                  {(() => {
+                    const key = getEntityKey(selectedEntity);
+                    const priorAvailable = PRIOR_FINDINGS_BY_ENTITY[key] || [];
+                    const imported = importedFindingsByEntityId[key] || [];
+                    return (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleImportPriorFindings(selectedEntity)}
+                        disabled={priorAvailable.length === 0 || imported.length > 0}
+                        sx={{ mb: 2 }}
+                      >
+                        {imported.length > 0 ? "Imported" : "Import prior findings"}
+                      </Button>
+                    );
+                  })()}
+                </>
+              )}
+
+              <Box sx={{ mt: 4 }}>
                 {(() => {
                   const key = getEntityKey(selectedEntity);
-                  const priorAvailable = PRIOR_FINDINGS_BY_ENTITY[key] || [];
-                  const imported = importedFindingsByEntityId[key] || [];
+                  const runFindings = runFindingsByEntityId[key] || [];
+                  const importedFindings = importedFindingsByEntityId[key] || [];
+
+                  const renderFindingCard = (finding) => {
+                    const state = findingStateById[finding.id] || { triage: "Unreviewed", triagedAt: undefined };
+                    const showHistoricalFalsePositive = !!finding.isFalsePositive;
+
+                    return (
+                      <Paper key={finding.id} variant="outlined" sx={{ p: 3, width: "100%", boxSizing: "border-box" }}>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          justifyContent="space-between"
+                          spacing={1}
+                          sx={{ mb: 0.5 }}
+                        >
+                          <Typography variant="subtitle1" fontWeight={600}>
+                            {finding.title}
+                          </Typography>
+                          <Chip
+                            label={finding.severity || "Medium"}
+                            size="small"
+                            variant="outlined"
+                            color="default"
+                            sx={{ fontWeight: 500 }}
+                          />
+                        </Stack>
+
+                        <Typography variant="body2" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                          {finding.type} · {finding.sourceDeal} · {finding.date}
+                        </Typography>
+
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ wordBreak: "break-word", lineHeight: 1.6, mb: 2 }}
+                        >
+                          {finding.snippet}
+                        </Typography>
+
+                        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
+                          <TextField
+                            select
+                            size="small"
+                            label="Review decision"
+                            value={state.triage ?? "Unreviewed"}
+                            onChange={(e) => handleFindingTriageChange(finding.id, e.target.value)}
+                            sx={{ minWidth: 150 }}
+                          >
+                            <MenuItem value="Unreviewed">Unreviewed</MenuItem>
+                            <MenuItem value="Confirmed">Confirmed</MenuItem>
+                            <MenuItem value="False Positive">False Positive</MenuItem>
+                          </TextField>
+                        </Stack>
+
+                        <TextField
+                          label="Analyst notes"
+                          placeholder="Add context, rationale, or supporting detail…"
+                          multiline
+                          minRows={3}
+                          size="small"
+                          fullWidth
+                          value={uwNotesByFinding[finding.id] ?? ""}
+                          onChange={(e) => handleUwNoteChange(finding.id, e.target.value)}
+                          sx={{ mb: 1.5, "& .MuiInputBase-root": { maxWidth: "100%" } }}
+                        />
+
+                        {noteSavedHintFindingId === finding.id && (
+                          <Typography variant="caption" color="success.main" sx={{ display: "block", mb: 1 }}>
+                            Saved
+                          </Typography>
+                        )}
+
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          Source:{" "}
+                          {finding.url || finding.attachmentUrl ? (
+                            <>
+                              {finding.url && (
+                                <Link href={finding.url} target="_blank" rel="noopener noreferrer" sx={linkSx}>
+                                  Open source
+                                </Link>
+                              )}
+                              {finding.url && finding.attachmentUrl && " · "}
+                              {finding.attachmentUrl && (
+                                <Link
+                                  href={finding.attachmentUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  sx={linkSx}
+                                >
+                                  {finding.attachmentName || "View attachment"}
+                                </Link>
+                              )}
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </Typography>
+
+                        {showHistoricalFalsePositive && (
+                          <Stack direction="row" sx={{ mt: 0.5 }}>
+                            <Chip label="Previously marked false positive" size="small" color="default" variant="outlined" />
+                          </Stack>
+                        )}
+                      </Paper>
+                    );
+                  };
+
+                  const hasRun = runFindings.length > 0;
+                  const hasImported = importedFindings.length > 0;
+
                   return (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => handleImportPriorFindings(selectedEntity)}
-                      disabled={priorAvailable.length === 0 || imported.length > 0}
-                      sx={{ mb: 2 }}
-                    >
-                      {imported.length > 0 ? "Imported" : "Import prior findings"}
-                    </Button>
+                    <>
+                      {hasRun && (
+                        <Box>
+                          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1, letterSpacing: 0.2 }}>
+                            Run findings ({runFindings.length})
+                          </Typography>
+                          <Stack spacing={3} sx={{ mb: 2 }}>
+                            {runFindings.map(renderFindingCard)}
+                          </Stack>
+                        </Box>
+                      )}
+
+                      {hasRun && hasImported && <Divider sx={{ mt: 4, mb: 4 }} />}
+
+                      {hasImported && (
+                        <Box sx={{ mt: 5 }}>
+                          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1, letterSpacing: 0.2 }}>
+                            Imported findings ({importedFindings.length})
+                          </Typography>
+                          <Stack spacing={3} sx={{ mb: 2 }}>
+                            {importedFindings.map(renderFindingCard)}
+                          </Stack>
+                        </Box>
+                      )}
+
+                      {hasRun || hasImported ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75, mb: 3 }}>
+                          {entityNeedsReview(selectedEntity) ? "Needs review" : "Reviewed"}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                          No additional findings available for this entity.
+                        </Typography>
+                      )}
+                    </>
                   );
                 })()}
-              </>
-            )}
-
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              Findings
-            </Typography>
-            {(() => {
-              const key = getEntityKey(selectedEntity);
-              const imported = importedFindingsByEntityId[key] || [];
-              const priorAvailable = PRIOR_FINDINGS_BY_ENTITY[key] || [];
-              return (
-                <>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                    Key: {key} · Prior: {priorAvailable.length} · Imported: {imported.length}
-                  </Typography>
-                  {imported.length > 0 ? (
-                    <Stack spacing={1.5} sx={{ mb: 3 }}>
-                      {imported.map((finding) => (
-                    <Paper
-                      key={finding.id}
-                      variant="outlined"
-                      sx={{ p: 1.5, width: "100%", boxSizing: "border-box" }}
-                    >
-                      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
-                        {finding.title}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                        {finding.type} · {finding.severity} · {finding.sourceDeal} · {finding.date}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-word" }}>
-                        {finding.snippet}
-                      </Typography>
-                      <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.5} sx={{ mt: 1 }}>
-                        {finding.url && (
-                          <Link
-                            href={finding.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            sx={linkSx}
-                          >
-                            Open source
-                          </Link>
-                        )}
-                        {finding.isFalsePositive && (
-                          <Chip label="False positive" size="small" color="default" variant="outlined" />
-                        )}
-                      </Stack>
-                    </Paper>
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                      No additional findings available for this entity.
-                    </Typography>
-                  )}
-                </>
-              );
-            })()}
-
-            <Box sx={{ mt: "auto" }}>
-              <Button
-                variant="outlined"
-                fullWidth
-                onClick={handleDrawerClose}
-              >
-                Close
-              </Button>
+              </Box>
             </Box>
           </Box>
         )}
@@ -1016,10 +1406,7 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
             <List dense disablePadding>
               {allPriorDeals.map((deal) => (
                 <ListItem key={deal.dealName} disablePadding>
-                  <ListItemButton
-                    dense
-                    onClick={() => handleBulkDealToggle(deal.dealName)}
-                  >
+                  <ListItemButton dense onClick={() => handleBulkDealToggle(deal.dealName)}>
                     <ListItemIcon sx={{ minWidth: 40 }}>
                       <Checkbox
                         edge="start"
@@ -1066,4 +1453,3 @@ function DealScreeningPage({ onBackToPipeline, entities = [], setEntities, setSe
 }
 
 export default DealScreeningPage;
-

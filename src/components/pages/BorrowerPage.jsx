@@ -272,7 +272,6 @@ function BorrowerPage({ entities = [], setEntities }) {
     }
 
     const nextId = getNextId(entities);
-    const riskLevel = Math.random() < 0.8 ? "Low" : "Medium";
     const newEntity = {
       id: nextId,
       name: finalName,
@@ -282,7 +281,6 @@ function BorrowerPage({ entities = [], setEntities }) {
       isGuarantor: form.guarantor,
       source: "Borrower intake",
       searchStatus: "Not yet run",
-      riskLevel,
       priorScreening: "No",
       priorDeals: [],
       imported: false,
@@ -305,7 +303,6 @@ function BorrowerPage({ entities = [], setEntities }) {
         name: "Riverside Holdings LLC",
         type: "LLC",
         source: "Borrower intake",
-        riskLevel: "Low",
         priorScreening: "No",
         priorDeals: [],
         searchStatus: "Not yet run",
@@ -316,7 +313,6 @@ function BorrowerPage({ entities = [], setEntities }) {
         name: "Alicia Grant",
         type: "Individual",
         source: "Borrower intake",
-        riskLevel: "Low",
         priorScreening: "No",
         priorDeals: [],
         searchStatus: "Not yet run",
