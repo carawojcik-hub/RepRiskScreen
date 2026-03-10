@@ -34,7 +34,7 @@ function DashboardLayout({
   setEntities,
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const PageContent = PAGE_COMPONENTS[selectedPage] ?? OverviewPage;
+  const PageContent = PAGE_COMPONENTS[selectedPage] ?? DealScreeningPage;
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", overflow: "hidden" }}>

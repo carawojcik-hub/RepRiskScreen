@@ -65,7 +65,7 @@ function Sidebar({
 
   const handleBackToPipeline = () => {
     if (onNavigatePipeline) onNavigatePipeline();
-    else setSelectedPage("Overview");
+    else setSelectedPage("Screening");
   };
 
   return (

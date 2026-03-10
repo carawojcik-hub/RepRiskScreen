@@ -42,6 +42,7 @@ import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 const DEFAULT_TERMS = [
   "Litigation",
@@ -237,19 +238,31 @@ function DealScreeningPage({
     return importedFindingsByEntityId[key] || [];
   };
 
+  /** Single source of truth: effective severity for risk (False Positive → Low). */
+  const getEffectiveSeverity = (finding) => {
+    const triage = findingStateById[finding.id]?.triage ?? "Unreviewed";
+    if (triage === "False Positive") return "Low";
+    return finding.severity || "Medium";
+  };
+
   const computeRiskFromFindings = (findings) => {
     if (!findings || findings.length === 0) return null;
-    let best = "Low";
     let maxRank = -1;
+    let derived = "Low";
     findings.forEach((f) => {
-      const sev = f.severity || "Medium";
-      const rank = sev === "High" ? 2 : sev === "Medium" ? 1 : 0;
+      const effectiveSeverity = getEffectiveSeverity(f);
+      const rank =
+        effectiveSeverity === "High"
+          ? 2
+          : effectiveSeverity === "Medium"
+            ? 1
+            : 0;
       if (rank > maxRank) {
         maxRank = rank;
-        best = sev === "High" ? "High" : sev === "Medium" ? "Medium" : "Low";
+        derived = effectiveSeverity;
       }
     });
-    return best;
+    return derived;
   };
 
   /** Pick entity for "new run findings" demo: no prior deals, no prior findings in PRIOR_FINDINGS_BY_ENTITY. */
@@ -641,14 +654,18 @@ function DealScreeningPage({
           >
             <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
               <Typography variant="h6">Associated Entities</Typography>
-              <Chip
-                label={
-                  status === "Not Started" ? "Not yet run" : status === "Running" ? "Running" : "Completed"
-                }
-                color={status === "Not Started" ? "default" : status === "Completed" ? "success" : "warning"}
-                size="small"
-                variant={status === "Not Started" ? "outlined" : "filled"}
-              />
+              {status === "Completed" && lastRunAt ? (
+                <Typography variant="body2" color="text.secondary">
+                  Last screened {new Date(lastRunAt).toLocaleString()}
+                </Typography>
+              ) : (
+                <Chip
+                  label={status === "Not Started" ? "Not yet run" : "Running"}
+                  color={status === "Not Started" ? "default" : "warning"}
+                  size="small"
+                  variant={status === "Not Started" ? "outlined" : "filled"}
+                />
+              )}
             </Stack>
 
             <Stack direction="row" spacing={1.5} flexWrap="wrap">
@@ -876,20 +893,32 @@ function DealScreeningPage({
                     </TableCell>
 
                     <TableCell>
-                      {status !== "Not Started" ? (
-                        entity.riskLevel ? (
-                          <Chip
-                            label={entity.riskLevel}
-                            color={RISK_COLOR[entity.riskLevel] ?? "default"}
-                            size="small"
-                            sx={{ fontWeight: 600 }}
-                          />
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            —
-                          </Typography>
-                        )
-                      ) : (() => {
+                      {status === "Running" ? (
+                        <Typography variant="body2" color="text.secondary">
+                          —
+                        </Typography>
+                      ) : status === "Completed" ? (() => {
+                          const findings = getFindingsForEntity(entity);
+                          const displayRisk =
+                            findings.length > 0
+                              ? computeRiskFromFindings(findings)
+                              : entity.riskLevel;
+                          if (!displayRisk) {
+                            return (
+                              <Typography variant="body2" color="text.secondary">
+                                —
+                              </Typography>
+                            );
+                          }
+                          return (
+                            <Chip
+                              label={displayRisk}
+                              color={RISK_COLOR[displayRisk] ?? "default"}
+                              size="small"
+                              sx={{ fontWeight: 600 }}
+                            />
+                          );
+                        })() : (() => {
                           const imported = getImportedFindingsForEntity(entity);
                           if (!imported.length) {
                             return (
@@ -1246,7 +1275,21 @@ function DealScreeningPage({
 
                   const renderFindingCard = (finding) => {
                     const state = findingStateById[finding.id] || { triage: "Unreviewed", triagedAt: undefined };
+                    const triage = state.triage ?? "Unreviewed";
+                    const effectiveSeverity = getEffectiveSeverity(finding);
+                    const isDowngraded = triage === "False Positive";
+                    const originalSeverity = finding.severity || "Medium";
                     const showHistoricalFalsePositive = !!finding.isFalsePositive;
+
+                    const severityChip = (
+                      <Chip
+                        label={isDowngraded ? "Low · False positive" : effectiveSeverity}
+                        size="small"
+                        variant="outlined"
+                        color={RISK_COLOR[effectiveSeverity] ?? "default"}
+                        sx={{ fontWeight: 500 }}
+                      />
+                    );
 
                     return (
                       <Paper key={finding.id} variant="outlined" sx={{ p: 3, width: "100%", boxSizing: "border-box" }}>
@@ -1260,18 +1303,24 @@ function DealScreeningPage({
                           <Typography variant="subtitle1" fontWeight={600}>
                             {finding.title}
                           </Typography>
-                          <Chip
-                            label={finding.severity || "Medium"}
-                            size="small"
-                            variant="outlined"
-                            color="default"
-                            sx={{ fontWeight: 500 }}
-                          />
+                          {isDowngraded ? (
+                            <Tooltip title="Marked False Positive — risk impact downgraded to Low">
+                              {severityChip}
+                            </Tooltip>
+                          ) : (
+                            severityChip
+                          )}
                         </Stack>
 
                         <Typography variant="body2" color="text.secondary" sx={{ display: "block", mb: 1 }}>
                           {finding.type} · {finding.sourceDeal} · {finding.date}
                         </Typography>
+
+                        {isDowngraded && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                            Original severity: {originalSeverity}
+                          </Typography>
+                        )}
 
                         <Typography
                           variant="body2"
@@ -1281,7 +1330,7 @@ function DealScreeningPage({
                           {finding.snippet}
                         </Typography>
 
-                        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
+                        <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" sx={{ mb: 1.5 }}>
                           <TextField
                             select
                             size="small"
@@ -1294,10 +1343,17 @@ function DealScreeningPage({
                             <MenuItem value="Confirmed">Confirmed</MenuItem>
                             <MenuItem value="False Positive">False Positive</MenuItem>
                           </TextField>
+                          {triage === "False Positive" && (
+                            <Tooltip title="Does not contribute to risk">
+                              <IconButton size="small" aria-label="False positive – does not contribute to risk" sx={{ color: "text.secondary" }}>
+                                <InfoOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </Stack>
 
                         <TextField
-                          label="Analyst notes"
+                          label="Notes"
                           placeholder="Add context, rationale, or supporting detail…"
                           multiline
                           minRows={3}

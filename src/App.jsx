@@ -3,7 +3,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import { ENTITIES as ENTITIES_SEED } from "./data/entities";
 
 function App() {
-  const [selectedPage, setSelectedPage] = useState("Overview");
+  const [selectedPage, setSelectedPage] = useState("Screening");
   const [entities, setEntities] = useState(() => ENTITIES_SEED);
 
   const handleNavigatePipeline = () => {
